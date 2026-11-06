@@ -59,10 +59,12 @@ test.describe('leave request approval', () => {
 
             await test.step('WHEN the manager opens their Leave List for that leave period', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
-                await managerSession.leaveListPage.searchLeaveRequests({
-                    employeeName: applicant.employeeFullName,
-                    ...leavePeriod,
-                });
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
             });
 
             await test.step('THEN it holds that request, awaiting approval', async () => {
@@ -123,10 +125,12 @@ test.describe('leave request approval', () => {
 
             await test.step('WHEN the manager opens its details from the Leave List', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
-                await managerSession.leaveListPage.searchLeaveRequests({
-                    employeeName: applicant.employeeFullName,
-                    ...leavePeriod,
-                });
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
                 await managerSession.leaveListPage.openDetailsFor(
                     applicant.employeeFullName
                 );
@@ -154,7 +158,7 @@ test.describe('leave request approval', () => {
                     employeeSession.myLeaveListPage.heading
                 ).toBeVisible();
 
-                await employeeSession.myLeaveListPage.filterToPeriod(
+                await employeeSession.myLeaveListPage.filterToPeriodAndVerify(
                     leavePeriod
                 );
 
@@ -222,10 +226,12 @@ test.describe('leave request approval', () => {
 
             await test.step('WHEN the manager comments on it', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
-                await managerSession.leaveListPage.searchLeaveRequests({
-                    employeeName: applicant.employeeFullName,
-                    ...leavePeriod,
-                });
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
                 await managerSession.leaveListPage.openDetailsFor(
                     applicant.employeeFullName
                 );
@@ -248,7 +254,7 @@ test.describe('leave request approval', () => {
 
             await test.step('THEN the employee sees the rejection and the comment', async () => {
                 await employeeSession.myLeaveListPage.openMyLeaveList();
-                await employeeSession.myLeaveListPage.filterToPeriod(
+                await employeeSession.myLeaveListPage.filterToPeriodAndVerify(
                     leavePeriod
                 );
 

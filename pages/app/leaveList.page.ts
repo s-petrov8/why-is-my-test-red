@@ -1,4 +1,4 @@
-import { Locator, Page } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { LeaveStatuses, Messages, Routes } from '../../enums/app/app';
 import { formatAppDate } from '../../helpers/util/util';
@@ -136,21 +136,33 @@ export class LeaveListPage {
     /**
      * Filters the list to one employee over one date range, then searches.
      *
+     * The form fills its default dates in when the leave periods answer arrives, and
+     * only into a field that is still empty. An answer arriving while a date is being
+     * typed runs the two values together, so this waits for the defaults first, and
+     * confirms the dates it typed.
+     *
      * @param {object} filter - The filter to apply.
      * @param {string} filter.employeeName - Full name as the autocomplete renders it.
      * @param {Date} filter.fromDate - Start of the date range to search.
      * @param {Date} filter.toDate - End of the date range to search.
      * @returns {Promise<void>} Resolves once the search request completes.
      */
-    async searchLeaveRequests(filter: {
+    async searchLeaveRequestsAndVerify(filter: {
         employeeName: string;
         fromDate: Date;
         toDate: Date;
     }): Promise<void> {
-        await this.fromDateInput.fill(formatAppDate(filter.fromDate));
+        await expect(this.toDateInput).not.toHaveValue('');
 
-        await this.toDateInput.clear();
+        await this.fromDateInput.fill(formatAppDate(filter.fromDate));
         await this.toDateInput.fill(formatAppDate(filter.toDate));
+
+        await expect(this.fromDateInput).toHaveValue(
+            formatAppDate(filter.fromDate)
+        );
+        await expect(this.toDateInput).toHaveValue(
+            formatAppDate(filter.toDate)
+        );
 
         await this.employeeNameInput.fill(filter.employeeName);
         await this.employeeNameOptions

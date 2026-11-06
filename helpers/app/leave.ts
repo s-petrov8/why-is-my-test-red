@@ -525,7 +525,10 @@ export async function readWorkWeek(api: ApiRequestFn): Promise<WorkWeek> {
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return body.data;
+    const { monday, tuesday, wednesday, thursday, friday, saturday, sunday } =
+        body.data;
+
+    return { monday, tuesday, wednesday, thursday, friday, saturday, sunday };
 }
 
 /**

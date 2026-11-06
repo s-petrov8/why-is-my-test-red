@@ -1,4 +1,4 @@
-import { Locator, Page } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { Messages, Routes } from '../../enums/app/app';
 import {
@@ -101,19 +101,31 @@ export class MyLeaveListPage {
      * Filters the list to a date range, then searches. The list starts on today's
      * leave period, so leave booked into the next one needs this to show.
      *
+     * The form fills its default dates in when the leave periods answer arrives, and
+     * only into a field that is still empty. An answer arriving while a date is being
+     * typed runs the two values together, so this waits for the defaults first, and
+     * confirms the dates it typed.
+     *
      * @param {object} period - The range.
      * @param {Date} period.fromDate - Its first day.
      * @param {Date} period.toDate - Its last day.
      * @returns {Promise<void>} Resolves once the search is submitted.
      */
-    async filterToPeriod(period: {
+    async filterToPeriodAndVerify(period: {
         fromDate: Date;
         toDate: Date;
     }): Promise<void> {
-        await this.fromDateInput.fill(formatAppDate(period.fromDate));
+        await expect(this.toDateInput).not.toHaveValue('');
 
-        await this.toDateInput.clear();
+        await this.fromDateInput.fill(formatAppDate(period.fromDate));
         await this.toDateInput.fill(formatAppDate(period.toDate));
+
+        await expect(this.fromDateInput).toHaveValue(
+            formatAppDate(period.fromDate)
+        );
+        await expect(this.toDateInput).toHaveValue(
+            formatAppDate(period.toDate)
+        );
 
         await this.searchButton.click();
     }
