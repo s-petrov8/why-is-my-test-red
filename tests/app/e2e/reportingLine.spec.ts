@@ -23,6 +23,7 @@ test.describe('reporting line change', () => {
             adminContext,
             apiRequestAs,
             newTempUser,
+            newSupervisorOf,
             signInAs,
         }) => {
             const {
@@ -32,7 +33,8 @@ test.describe('reporting line change', () => {
                 leaveDate,
                 leavePeriod,
             } = tempLeaveApprovalUsers;
-            const newSupervisor = await newTempUser();
+            // Someone else's supervisor, so the refusal below comes from the line and not the role.
+            const newSupervisor = await newSupervisorOf(await newTempUser());
 
             const employeeSession = await signInAs(applicant);
             const formerSupervisorSession = await signInAs(supervisor);
@@ -68,7 +70,7 @@ test.describe('reporting line change', () => {
                 ).toBeVisible();
             });
 
-            await test.step('AND someone with no line to them cannot', async () => {
+            await test.step('AND the supervisor of someone else cannot', async () => {
                 await newSupervisorSession.leaveRequestDetailsPage.openLeaveRequest(
                     leaveRequestId
                 );
@@ -81,7 +83,7 @@ test.describe('reporting line change', () => {
                 ).toBeHidden();
             });
 
-            await test.step('WHEN the line moves to that other person', async () => {
+            await test.step('WHEN the line moves to that person', async () => {
                 await removeSupervisor(adminContext, {
                     empNumber: applicant.empNumber,
                     supervisorEmpNumber: supervisor.empNumber,

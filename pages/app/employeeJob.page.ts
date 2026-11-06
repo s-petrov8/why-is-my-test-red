@@ -82,9 +82,7 @@ export class EmployeeJobPage {
     // ==================== Actions ====================
 
     /**
-     * Opens an employee's Job tab and waits for the job details the page loads. That
-     * wait is load-bearing: until they arrive the termination button says "Terminate
-     * Employment" even for a terminated employee.
+     * Opens an employee's Job tab and waits for the job details the page loads.
      *
      * @param {number} empNumber - The employee.
      * @returns {Promise<void>} Resolves once the job details have loaded.

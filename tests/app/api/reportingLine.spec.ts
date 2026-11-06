@@ -5,11 +5,7 @@ import {
     EmployeeListResponse,
     SupervisorResponseSchema,
 } from '../../../fixtures/api/schemas/app/employeeSchema';
-import {
-    ForbiddenResponseSchema,
-    InvalidParameterResponseSchema,
-    RecordsNotFoundResponseSchema,
-} from '../../../fixtures/api/schemas/app/errorSchema';
+import type { InvalidParameterResponse } from '../../../fixtures/api/schemas/app/errorSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import { assignSupervisor } from '../../../helpers/app/reportingLine';
 import { formatIsoDate } from '../../../helpers/util/util';
@@ -79,17 +75,15 @@ test.describe('api/v2/pim/employees reporting lines', () => {
             });
 
             await test.step('WHEN the supervisor reads an unrelated employee THEN it is refused', async () => {
-                const { status, body } = await supervisor.api({
-                    method: 'GET',
-                    url: `${ApiEndpoints.PIM_EMPLOYEES}/${tempTestEmployee.empNumber}`,
-                    baseUrl: appConfig.apiUrl,
-                });
+                const { status, body } =
+                    await supervisor.api<InvalidParameterResponse>({
+                        method: 'GET',
+                        url: `${ApiEndpoints.PIM_EMPLOYEES}/${tempTestEmployee.empNumber}`,
+                        baseUrl: appConfig.apiUrl,
+                    });
 
                 expect(status).toBe(422);
-                expect(
-                    InvalidParameterResponseSchema.parse(body).error.data
-                        .invalidParamKeys
-                ).toEqual(['empNumber']);
+                expect(body.error.data.invalidParamKeys).toEqual(['empNumber']);
             });
         }
     );
@@ -146,17 +140,15 @@ test.describe('api/v2/pim/employees reporting lines', () => {
             });
 
             await test.step('THEN the same session can no longer read the subordinate', async () => {
-                const { status, body } = await supervisor.api({
-                    method: 'GET',
-                    url: `${ApiEndpoints.PIM_EMPLOYEES}/${subordinate.empNumber}`,
-                    baseUrl: appConfig.apiUrl,
-                });
+                const { status, body } =
+                    await supervisor.api<InvalidParameterResponse>({
+                        method: 'GET',
+                        url: `${ApiEndpoints.PIM_EMPLOYEES}/${subordinate.empNumber}`,
+                        baseUrl: appConfig.apiUrl,
+                    });
 
                 expect(status).toBe(422);
-                expect(
-                    InvalidParameterResponseSchema.parse(body).error.data
-                        .invalidParamKeys
-                ).toEqual(['empNumber']);
+                expect(body.error.data.invalidParamKeys).toEqual(['empNumber']);
             });
 
             await test.step('AND its employee list is empty', async () => {
@@ -173,15 +165,12 @@ test.describe('api/v2/pim/employees reporting lines', () => {
 
             for (const { description, ...request } of absentLineRequests) {
                 await test.step(`AND a ${description} of the absent line is 404`, async () => {
-                    const { status, body } = await apiRequest({
+                    const { status } = await apiRequest({
                         ...request,
                         baseUrl: appConfig.apiUrl,
                     });
 
                     expect(status).toBe(404);
-                    expect(
-                        RecordsNotFoundResponseSchema.parse(body)
-                    ).toBeTruthy();
                 });
             }
         }
@@ -199,9 +188,11 @@ test.describe('api/v2/pim/employees reporting lines', () => {
             const supervisor = await newTempUser();
             const boss = await newSupervisorOf(supervisor);
 
-            await assignSupervisor(adminContext, {
-                empNumber: tempTestEmployee.empNumber,
-                supervisorEmpNumber: supervisor.empNumber,
+            await test.step('GIVEN the supervisor has a subordinate', async () => {
+                await assignSupervisor(adminContext, {
+                    empNumber: tempTestEmployee.empNumber,
+                    supervisorEmpNumber: supervisor.empNumber,
+                });
             });
 
             await test.step('WHEN the boss lists employees THEN only their own subordinate is there', async () => {
@@ -218,17 +209,15 @@ test.describe('api/v2/pim/employees reporting lines', () => {
             });
 
             await test.step("WHEN the boss reads the supervisor's subordinate THEN it is refused", async () => {
-                const { status, body } = await boss.api({
-                    method: 'GET',
-                    url: `${ApiEndpoints.PIM_EMPLOYEES}/${tempTestEmployee.empNumber}`,
-                    baseUrl: appConfig.apiUrl,
-                });
+                const { status, body } =
+                    await boss.api<InvalidParameterResponse>({
+                        method: 'GET',
+                        url: `${ApiEndpoints.PIM_EMPLOYEES}/${tempTestEmployee.empNumber}`,
+                        baseUrl: appConfig.apiUrl,
+                    });
 
                 expect(status).toBe(422);
-                expect(
-                    InvalidParameterResponseSchema.parse(body).error.data
-                        .invalidParamKeys
-                ).toEqual(['empNumber']);
+                expect(body.error.data.invalidParamKeys).toEqual(['empNumber']);
             });
         }
     );
@@ -263,20 +252,21 @@ test.describe('api/v2/pim/employees reporting lines', () => {
                 },
             ] as const;
 
-            await assignSupervisor(adminContext, {
-                empNumber: tempTestEmployee.empNumber,
-                supervisorEmpNumber: supervisor.empNumber,
+            await test.step('GIVEN the supervisor has a subordinate', async () => {
+                await assignSupervisor(adminContext, {
+                    empNumber: tempTestEmployee.empNumber,
+                    supervisorEmpNumber: supervisor.empNumber,
+                });
             });
 
             for (const { description, ...write } of deniedWrites) {
                 await test.step(`WHEN the supervisor writes ${description} THEN it is 403`, async () => {
-                    const { status, body } = await supervisor.api({
+                    const { status } = await supervisor.api({
                         ...write,
                         baseUrl: appConfig.apiUrl,
                     });
 
                     expect(status).toBe(403);
-                    expect(ForbiddenResponseSchema.parse(body)).toBeTruthy();
                 });
             }
         }

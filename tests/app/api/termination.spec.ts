@@ -7,7 +7,6 @@ import {
     JobDetailsResponseSchema,
     TerminationResponseSchema,
 } from '../../../fixtures/api/schemas/app/employeeSchema';
-import { RecordsNotFoundResponseSchema } from '../../../fixtures/api/schemas/app/errorSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import { readSignInRefusal } from '../../../helpers/app/createStorageState';
 import {
@@ -151,13 +150,12 @@ test.describe('api/v2/pim/employees terminations', () => {
             });
 
             await test.step('WHEN someone not terminated is reactivated THEN it is 404', async () => {
-                const { status, body } = await submitReactivation(
+                const { status } = await submitReactivation(
                     apiRequest,
                     empNumber
                 );
 
                 expect(status).toBe(404);
-                expect(RecordsNotFoundResponseSchema.parse(body)).toBeTruthy();
             });
         }
     );

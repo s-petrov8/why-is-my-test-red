@@ -125,15 +125,16 @@ export const CreateTerminationRequestSchema = z.strictObject({
     note: z.string().max(255).optional(),
 });
 
-/**
- * A termination record, answered by `POST` and `DELETE` on
- * `/api/v2/pim/employees/{empNumber}/terminations`. The annotations document the
- * `DELETE` as answering a list of ids; the application answers the removed record.
- */
+// FIXME: no ticket yet. The annotations on `EmployeeTerminationAPI` are stale, confirmed by the project owner. This schema follows the application:
+// - `DELETE` is documented with a body of `ids`, and the application ignores any body.
+// - `DELETE` is documented as answering a list of ids, and answers the removed record.
+// - `POST` is documented with a top-level `empNumber`, and answers `meta.empNumber`.
+// - `note` is documented as a string, and is null when none is sent. Tests always send one, so this schema requires a string.
+/** A termination record, answered by `POST` and `DELETE` on `/api/v2/pim/employees/{empNumber}/terminations`. */
 export const TerminationResponseSchema = z.strictObject({
     data: z.strictObject({
         id: z.int(),
-        note: z.string().nullable(),
+        note: z.string(),
         date: z.iso.date(),
         terminationReason: z.strictObject({
             id: z.int(),

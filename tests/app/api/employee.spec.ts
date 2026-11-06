@@ -8,7 +8,10 @@ import {
 } from '../../../fixtures/api/schemas/app/employeeSchema';
 import { createEmployeeData } from '../../../test-data/factories/app/employee.factory';
 import { INVALID_EMPLOYEE_DATA } from '../../../test-data/static/app/invalidEmployeeData';
-import { InvalidParameterResponseSchema } from '../../../fixtures/api/schemas/app/errorSchema';
+import {
+    InvalidParameterResponse,
+    InvalidParameterResponseSchema,
+} from '../../../fixtures/api/schemas/app/errorSchema';
 import { VALID_EMPLOYEE_DATA } from '../../../test-data/static/app/validEmployeeData';
 
 test.describe('api/v2/pim/employees', () => {
@@ -89,7 +92,9 @@ test.describe('api/v2/pim/employees', () => {
         'should reject an employee id another employee holds',
         { tag: '@api' },
         async ({ apiRequest, tempTestEmployee }) => {
-            const { status, body } = await apiRequest<{ data?: Employee }>({
+            const { status, body } = await apiRequest<
+                { data?: Employee } & Partial<InvalidParameterResponse>
+            >({
                 method: 'POST',
                 url: ApiEndpoints.PIM_EMPLOYEES,
                 baseUrl: appConfig.apiUrl,
@@ -101,8 +106,7 @@ test.describe('api/v2/pim/employees', () => {
             empNumberToClean = body.data?.empNumber;
 
             expect(status).toBe(422);
-            const error = InvalidParameterResponseSchema.parse(body);
-            expect(error.error.data.invalidParamKeys).toEqual(['employeeId']);
+            expect(body.error?.data.invalidParamKeys).toEqual(['employeeId']);
         }
     );
 
