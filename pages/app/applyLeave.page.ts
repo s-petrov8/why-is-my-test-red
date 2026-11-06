@@ -1,7 +1,7 @@
 import { Locator, Page } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { ApiEndpoints, Messages, Routes } from '../../enums/app/app';
-import { formatAppDate } from '../../helpers/util/util';
+import { formatAppDate, formatIsoDate } from '../../helpers/util/util';
 
 /**
  * Page Object for the Apply Leave form (`Leave > Apply`), the page an employee
@@ -17,12 +17,15 @@ export class ApplyLeavePage {
     }
 
     /**
-     * Scopes to the field group whose label matches, the only handle the
-     * unlabelled controls on this form offer.
+     * Scopes to the field group whose label starts with this text, the only handle
+     * the unlabelled controls on this form offer. Anchored because a group also
+     * holds its error, and "To date should be after from date" names another field.
      */
     private inputGroup(label: string): Locator {
         // eslint-disable-next-line playwright/no-raw-locators -- the wrapper is a plain div; the labels are not associated with their inputs
-        return this.page.locator('.oxd-input-group').filter({ hasText: label });
+        return this.page
+            .locator('.oxd-input-group')
+            .filter({ hasText: new RegExp(`^${label}`) });
     }
 
     get leaveTypeDropdown(): Locator {
@@ -69,6 +72,23 @@ export class ApplyLeavePage {
         return this.toast.getByText(Messages.LEAVE_SUBMIT_FAILED);
     }
 
+    get balanceNotSufficient(): Locator {
+        return this.leaveBalance.getByText(
+            Messages.LEAVE_BALANCE_NOT_SUFFICIENT
+        );
+    }
+
+    get overlapHeading(): Locator {
+        return this.page.getByRole('heading', {
+            name: Messages.LEAVE_OVERLAP_HEADING,
+        });
+    }
+
+    get overlapRows(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- `getByRole('row')` also matches the header row
+        return this.page.locator('.oxd-table-card');
+    }
+
     get validationErrors(): Locator {
         // eslint-disable-next-line playwright/no-raw-locators -- field errors render as plain spans with no role and no link to their input
         return this.page.locator('.oxd-input-field-error-message');
@@ -99,7 +119,8 @@ export class ApplyLeavePage {
     }
 
     /**
-     * Fills the leave date range.
+     * Fills the leave date range and leaves the field, which is when the form
+     * recalculates the balance.
      *
      * @param {Date} fromDate - First day of leave.
      * @param {Date} toDate - Last day of leave.
@@ -110,6 +131,64 @@ export class ApplyLeavePage {
 
         await this.toDateInput.clear();
         await this.toDateInput.fill(formatAppDate(toDate));
+        await this.toDateInput.blur();
+    }
+
+    /**
+     * Fills the leave date range and waits for the form's recalculation, so a check
+     * of the balance can't pass on what the form showed before it.
+     *
+     * @param {Date} fromDate - First day of leave.
+     * @param {Date} toDate - Last day of leave.
+     * @returns {Promise<boolean>} Whether the application says the range goes below zero.
+     */
+    async setLeaveDatesAndWaitForBalance(
+        fromDate: Date,
+        toDate: Date
+    ): Promise<boolean> {
+        const [response] = await Promise.all([
+            this.page.waitForResponse(
+                (candidate) =>
+                    candidate
+                        .url()
+                        .includes(ApiEndpoints.LEAVE_BALANCE_BY_TYPE) &&
+                    candidate.url().includes(`toDate=${formatIsoDate(toDate)}`)
+            ),
+            this.setLeaveDates(fromDate, toDate),
+        ]);
+        const { data }: { data: { negative: boolean } } = await response.json();
+
+        return data.negative;
+    }
+
+    /**
+     * Opens the Leave Type dropdown, leaving it open to read its options.
+     *
+     * @returns {Promise<void>} Resolves once the dropdown is open.
+     */
+    async openLeaveTypeOptions(): Promise<void> {
+        await this.leaveTypeDropdown.click();
+    }
+
+    /**
+     * Fills the whole form and submits it, for a request that conflicts with
+     * existing leave: the form checks for a conflict first and sends no request
+     * when it finds one. Other requests use {@link applyForLeave}.
+     *
+     * @param {object} leave - The leave to request.
+     * @param {string} leave.leaveType - The leave type name.
+     * @param {Date} leave.fromDate - First day of leave.
+     * @param {Date} leave.toDate - Last day of leave.
+     * @returns {Promise<void>} Resolves once the form is submitted.
+     */
+    async submitConflictingLeave(leave: {
+        leaveType: string;
+        fromDate: Date;
+        toDate: Date;
+    }): Promise<void> {
+        await this.selectLeaveType(leave.leaveType);
+        await this.setLeaveDates(leave.fromDate, leave.toDate);
+        await this.applyButton.click();
     }
 
     /**

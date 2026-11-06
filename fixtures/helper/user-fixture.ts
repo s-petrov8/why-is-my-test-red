@@ -1,49 +1,90 @@
-import { BrowserContext, test as base } from '@playwright/test';
+import {
+    APIRequestContext,
+    BrowserContext,
+    test as base,
+} from '@playwright/test';
+import { appConfig } from '../../config/app';
+import { StorageStatePaths } from '../../enums/app/app';
 import { createAuthenticatedContext } from '../../helpers/app/createStorageState';
+import { assignSupervisor } from '../../helpers/app/reportingLine';
 import {
     createTempUser,
     deleteTempUser,
     signInAsTempUser,
     TempUser,
+    TempUserOptions,
 } from '../../helpers/app/tempUser';
+import { ApiRequestFn, ApiRequestParams } from '../api/api-types';
+import { apiRequest } from '../api/plain-function';
 import { createPageObjects, PageObjects } from '../pom/page-objects';
 
-/** Identity helper fixtures: creating throwaway persons and signing them in. */
+/**
+ * Identity helper fixtures, shared by every area: creating throwaway persons,
+ * signing them in, and putting them in reporting lines.
+ *
+ * Each person is removed after the test, and everything a person owns goes with
+ * them, so a test reuses shared configuration such as a leave type while staying
+ * isolated from every other test.
+ *
+ * - `newTempUser`: a person who can sign in, for browser tests through `signInAs`.
+ * - `newApiUser`: the same person with `api`, the API signed in as them.
+ * - `newSupervisorOf`: a new person who supervises an existing one.
+ * - `apiRequestAs`: the API signed in as an existing person.
+ *
+ * The admin session is the `apiRequest` fixture, or `adminContext` for helpers
+ * taking a request context. Never edit `Admin` or terminate
+ * employee 1, because both break the shared session: use a person from here.
+ */
 
 // ==================== Types ====================
 
+/** A throwaway person, with the API already signed in as them. */
+export type ApiUser = TempUser & { api: ApiRequestFn };
+
 export type UserFixtures = {
-    newTempUser: () => Promise<TempUser>;
+    /** A request context on the admin session, for helpers taking relative paths. */
+    adminContext: APIRequestContext;
+    newTempUser: (options?: TempUserOptions) => Promise<TempUser>;
     signInAs: (user: TempUser) => Promise<PageObjects>;
+    apiRequestAs: (user: TempUser) => Promise<ApiRequestFn>;
+    newApiUser: (options?: TempUserOptions) => Promise<ApiUser>;
+    newSupervisorOf: (
+        subordinate: TempUser,
+        options?: TempUserOptions
+    ) => Promise<ApiUser>;
 };
 
 // ==================== Fixtures ====================
 
 export const test = base.extend<UserFixtures>({
+    adminContext: async ({ playwright }, use) => {
+        const context = await playwright.request.newContext({
+            baseURL: appConfig.appUrl,
+            storageState: StorageStatePaths.APP,
+        });
+
+        try {
+            await use(context);
+        } finally {
+            await context.dispose();
+        }
+    },
     /**
      * Hands the test a function that creates a throwaway person on demand, and
      * deletes every person it created afterwards.
      */
-    newTempUser: async ({}, use) => {
-        const context = await createAuthenticatedContext();
+    newTempUser: async ({ adminContext }, use) => {
         const created: TempUser[] = [];
 
-        try {
-            await use(async (): Promise<TempUser> => {
-                const user = await createTempUser(context);
-                created.push(user);
+        await use(async (options?: TempUserOptions): Promise<TempUser> => {
+            const user = await createTempUser(adminContext, options);
+            created.push(user);
 
-                return user;
-            });
-        } finally {
-            try {
-                for (const user of [...created].reverse()) {
-                    await deleteTempUser(context, user);
-                }
-            } finally {
-                // Nested so a failed delete assertion cannot leak the context.
-                await context.dispose();
-            }
+            return user;
+        });
+
+        for (const user of [...created].reverse()) {
+            await deleteTempUser(adminContext, user);
         }
     },
     /**
@@ -71,5 +112,62 @@ export const test = base.extend<UserFixtures>({
                 await context.close();
             }
         }
+    },
+    /**
+     * Hands the test a function that signs a person in to the API, disposing every
+     * session afterwards. Several stay live at once, so a test can move between
+     * roles.
+     */
+    apiRequestAs: async ({}, use) => {
+        const contexts: APIRequestContext[] = [];
+
+        try {
+            await use(async (user: TempUser): Promise<ApiRequestFn> => {
+                const context = await createAuthenticatedContext({
+                    username: user.username,
+                    password: user.password,
+                });
+                contexts.push(context);
+
+                return async <T = unknown>(params: ApiRequestParams) => {
+                    const response = await apiRequest(context, params);
+
+                    return { ...response, body: response.body as T };
+                };
+            });
+        } finally {
+            for (const context of contexts) {
+                await context.dispose();
+            }
+        }
+    },
+    /** Hands the test a function that creates a person and signs them in to the API. */
+    newApiUser: async ({ newTempUser, apiRequestAs }, use) => {
+        await use(async (options?: TempUserOptions): Promise<ApiUser> => {
+            const user = await newTempUser(options);
+
+            return { ...user, api: await apiRequestAs(user) };
+        });
+    },
+    /**
+     * Hands the test a function that creates a person and makes them the direct
+     * supervisor of someone. The reporting line goes when either person is removed.
+     */
+    newSupervisorOf: async ({ adminContext, newApiUser }, use) => {
+        await use(
+            async (
+                subordinate: TempUser,
+                options?: TempUserOptions
+            ): Promise<ApiUser> => {
+                const supervisor = await newApiUser(options);
+
+                await assignSupervisor(adminContext, {
+                    empNumber: subordinate.empNumber,
+                    supervisorEmpNumber: supervisor.empNumber,
+                });
+
+                return supervisor;
+            }
+        );
     },
 });

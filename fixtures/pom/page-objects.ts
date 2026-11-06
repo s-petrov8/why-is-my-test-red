@@ -10,6 +10,8 @@ import { EmployeeListPage } from '../../pages/app/employeeList.page';
 // Leave
 import { ApplyLeavePage } from '../../pages/app/applyLeave.page';
 import { LeaveListPage } from '../../pages/app/leaveList.page';
+import { LeaveRequestDetailsPage } from '../../pages/app/leaveRequestDetails.page';
+import { MyLeaveListPage } from '../../pages/app/myLeaveList.page';
 
 /**
  * Every page object, bound to one browser page.
@@ -49,6 +51,8 @@ export type PageObjects = {
     // Leave
     applyLeavePage: ApplyLeavePage;
     leaveListPage: LeaveListPage;
+    leaveRequestDetailsPage: LeaveRequestDetailsPage;
+    myLeaveListPage: MyLeaveListPage;
 };
 
 /**
@@ -79,5 +83,7 @@ export function createPageObjects(page: Page): PageObjects {
         // Leave
         applyLeavePage: new ApplyLeavePage(page),
         leaveListPage: new LeaveListPage(page),
+        leaveRequestDetailsPage: new LeaveRequestDetailsPage(page),
+        myLeaveListPage: new MyLeaveListPage(page),
     };
 }

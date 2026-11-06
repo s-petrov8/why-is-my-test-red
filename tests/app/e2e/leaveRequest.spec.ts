@@ -1,5 +1,6 @@
 import { LeaveStatuses } from '../../../enums/app/app';
 import { expect, test } from '../../../fixtures/pom/test-options';
+import { createLeaveComment } from '../../../test-data/factories/app/leave.factory';
 
 /**
  * End-to-end cover for the leave approval workflow, the everyday exchange
@@ -22,8 +23,13 @@ test.describe('leave request approval', () => {
         'should let an employee request leave and their supervisor approve it',
         { tag: '@e2e' },
         async ({ tempLeaveApprovalUsers, signInAs }) => {
-            const { applicant, supervisor, leaveTypeName, leaveDate } =
-                tempLeaveApprovalUsers;
+            const {
+                applicant,
+                supervisor,
+                leaveTypeName,
+                leaveDate,
+                leavePeriod,
+            } = tempLeaveApprovalUsers;
 
             const employeeSession = await signInAs(applicant);
             const managerSession = await signInAs(supervisor);
@@ -51,8 +57,14 @@ test.describe('leave request approval', () => {
                 ).toBeVisible();
             });
 
-            await test.step('WHEN the manager opens their Leave List', async () => {
+            await test.step('WHEN the manager opens their Leave List for that leave period', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
             });
 
             await test.step('THEN it holds that request, awaiting approval', async () => {
@@ -78,6 +90,195 @@ test.describe('leave request approval', () => {
                         applicant.employeeFullName
                     )
                 ).toHaveCount(0);
+            });
+        }
+    );
+
+    test(
+        'should carry a request through approval and cancellation, with the balance following',
+        { tag: '@e2e' },
+        async ({ tempLeaveApprovalUsers, signInAs }) => {
+            const {
+                applicant,
+                supervisor,
+                leaveTypeName,
+                leaveDate,
+                leavePeriod,
+                entitledDays,
+            } = tempLeaveApprovalUsers;
+
+            const employeeSession = await signInAs(applicant);
+            const managerSession = await signInAs(supervisor);
+
+            await test.step('GIVEN the employee requested leave', async () => {
+                await employeeSession.applyLeavePage.openApplyLeavePage();
+                await employeeSession.applyLeavePage.applyForLeave({
+                    leaveType: leaveTypeName,
+                    fromDate: leaveDate,
+                    toDate: leaveDate,
+                });
+
+                await expect(
+                    employeeSession.applyLeavePage.successMessage
+                ).toBeVisible();
+            });
+
+            await test.step('WHEN the manager opens its details from the Leave List', async () => {
+                await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
+                await managerSession.leaveListPage.openDetailsFor(
+                    applicant.employeeFullName
+                );
+
+                await expect(
+                    managerSession.leaveRequestDetailsPage.heading
+                ).toBeVisible();
+            });
+
+            await test.step('AND approves it there', async () => {
+                await managerSession.leaveRequestDetailsPage.approveButton.click();
+
+                await expect(
+                    managerSession.leaveRequestDetailsPage.updatedMessage
+                ).toBeVisible();
+                await expect(
+                    managerSession.leaveRequestDetailsPage.dayRows
+                ).toContainText(LeaveStatuses.SCHEDULED);
+            });
+
+            await test.step('THEN the employee sees it scheduled, with the day off their balance', async () => {
+                await employeeSession.myLeaveListPage.openMyLeaveList();
+
+                await expect(
+                    employeeSession.myLeaveListPage.heading
+                ).toBeVisible();
+
+                await employeeSession.myLeaveListPage.filterToPeriodAndVerify(
+                    leavePeriod
+                );
+
+                await expect(
+                    employeeSession.myLeaveListPage.rowForDate(leaveDate)
+                ).toContainText(LeaveStatuses.SCHEDULED);
+                await expect(
+                    employeeSession.myLeaveListPage.balanceCell(
+                        leaveDate,
+                        entitledDays - 1
+                    )
+                ).toBeVisible();
+            });
+
+            await test.step('WHEN the employee cancels it', async () => {
+                await employeeSession.myLeaveListPage.cancelLeaveOn(leaveDate);
+
+                await expect(
+                    employeeSession.myLeaveListPage.updatedMessage
+                ).toBeVisible();
+            });
+
+            await test.step('THEN it shows as cancelled, with the balance whole again', async () => {
+                await expect(
+                    employeeSession.myLeaveListPage.rowForDate(leaveDate)
+                ).toContainText(LeaveStatuses.CANCELLED);
+                await expect(
+                    employeeSession.myLeaveListPage.balanceCell(
+                        leaveDate,
+                        entitledDays
+                    )
+                ).toBeVisible();
+            });
+        }
+    );
+
+    test(
+        'should show a rejection and its comment to the employee, who can then re-apply for the date',
+        { tag: '@e2e' },
+        async ({ tempLeaveApprovalUsers, signInAs }) => {
+            const {
+                applicant,
+                supervisor,
+                leaveTypeName,
+                leaveDate,
+                leavePeriod,
+            } = tempLeaveApprovalUsers;
+            const comment = createLeaveComment();
+
+            const employeeSession = await signInAs(applicant);
+            const managerSession = await signInAs(supervisor);
+
+            await test.step('GIVEN the employee requested leave', async () => {
+                await employeeSession.applyLeavePage.openApplyLeavePage();
+                await employeeSession.applyLeavePage.applyForLeave({
+                    leaveType: leaveTypeName,
+                    fromDate: leaveDate,
+                    toDate: leaveDate,
+                });
+
+                await expect(
+                    employeeSession.applyLeavePage.successMessage
+                ).toBeVisible();
+            });
+
+            await test.step('WHEN the manager comments on it', async () => {
+                await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequestsAndVerify(
+                    {
+                        employeeName: applicant.employeeFullName,
+                        ...leavePeriod,
+                    }
+                );
+                await managerSession.leaveListPage.openDetailsFor(
+                    applicant.employeeFullName
+                );
+                await managerSession.leaveRequestDetailsPage.addComment(
+                    comment
+                );
+
+                await expect(
+                    managerSession.leaveRequestDetailsPage.commentSavedMessage
+                ).toBeVisible();
+            });
+
+            await test.step('AND rejects it', async () => {
+                await managerSession.leaveRequestDetailsPage.rejectButton.click();
+
+                await expect(
+                    managerSession.leaveRequestDetailsPage.updatedMessage
+                ).toBeVisible();
+            });
+
+            await test.step('THEN the employee sees the rejection and the comment', async () => {
+                await employeeSession.myLeaveListPage.openMyLeaveList();
+                await employeeSession.myLeaveListPage.filterToPeriodAndVerify(
+                    leavePeriod
+                );
+
+                await expect(
+                    employeeSession.myLeaveListPage.rowForDate(leaveDate)
+                ).toContainText(LeaveStatuses.REJECTED);
+                await expect(
+                    employeeSession.myLeaveListPage.rowForDate(leaveDate)
+                ).toContainText(comment);
+            });
+
+            await test.step('WHEN the employee requests the same date again', async () => {
+                await employeeSession.applyLeavePage.openApplyLeavePage();
+                await employeeSession.applyLeavePage.applyForLeave({
+                    leaveType: leaveTypeName,
+                    fromDate: leaveDate,
+                    toDate: leaveDate,
+                });
+            });
+
+            await test.step('THEN it is accepted', async () => {
+                await expect(
+                    employeeSession.applyLeavePage.successMessage
+                ).toBeVisible();
             });
         }
     );

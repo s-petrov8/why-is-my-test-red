@@ -86,6 +86,28 @@ export const DeleteEmployeesResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
+/**
+ * The supervisor assignment returned by
+ * `POST /api/v2/pim/employees/{empNumber}/supervisors`.
+ */
+export const SupervisorResponseSchema = z.strictObject({
+    data: z.strictObject({
+        supervisor: z.strictObject({
+            empNumber: z.int(),
+            firstName: z.string(),
+            lastName: z.string(),
+            middleName: z.string(),
+            terminationId: z.int().nullable(),
+        }),
+        reportingMethod: z.strictObject({
+            id: z.int(),
+            name: z.string(),
+        }),
+    }),
+    meta: z.array(z.unknown()),
+    rels: z.array(z.unknown()),
+});
+
 // Type exports
 export type Employee = zOutput<typeof EmployeeSchema>;
 export type CreateEmployeeRequest = zOutput<typeof CreateEmployeeRequestSchema>;
@@ -95,3 +117,4 @@ export type EmployeeListResponse = zOutput<typeof EmployeeListResponseSchema>;
 export type DeleteEmployeesResponse = zOutput<
     typeof DeleteEmployeesResponseSchema
 >;
+export type SupervisorResponse = zOutput<typeof SupervisorResponseSchema>;

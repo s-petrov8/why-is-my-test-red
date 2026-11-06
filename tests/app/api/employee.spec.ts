@@ -17,15 +17,13 @@ test.describe('api/v2/pim/employees', () => {
         if (empNumberToClean !== undefined) {
             const id = empNumberToClean;
             empNumberToClean = undefined;
-            const { status, body } = await apiRequest({
+            const { status } = await apiRequest({
                 method: 'DELETE',
                 url: ApiEndpoints.PIM_EMPLOYEES,
                 baseUrl: appConfig.apiUrl,
                 body: { ids: [id] },
             });
             expect(status).toBe(200);
-            const deleteResponse = DeleteEmployeesResponseSchema.parse(body);
-            expect(deleteResponse.data).toEqual([id]);
         }
     });
 
