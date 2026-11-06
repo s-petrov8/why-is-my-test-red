@@ -61,7 +61,9 @@ test.describe('api/v2 admin shapes that setup, teardown and shared helpers rely 
             let userId = 0;
 
             await test.step('WHEN an account is created', async () => {
-                const { status, body } = await apiRequest({
+                const { status, body } = await apiRequest<{
+                    data: { id: number };
+                }>({
                     method: 'POST',
                     url: ApiEndpoints.ADMIN_USERS,
                     baseUrl: appConfig.apiUrl,
@@ -69,8 +71,10 @@ test.describe('api/v2 admin shapes that setup, teardown and shared helpers rely 
                 });
 
                 expect(status).toBe(200);
-                userId = UserResponseSchema.parse(body).data.id;
+                // Recorded before the parse, so a shape failure still cleans up.
+                userId = body.data.id;
                 userIdToDelete = userId;
+                expect(UserResponseSchema.parse(body)).toBeTruthy();
             });
 
             await test.step('WHEN it is read', async () => {
@@ -139,7 +143,9 @@ test.describe('api/v2 admin shapes that setup, teardown and shared helpers rely 
             let workShiftId = 0;
 
             await test.step('WHEN a work shift is created', async () => {
-                const { status, body } = await apiRequest({
+                const { status, body } = await apiRequest<{
+                    data: { id: number };
+                }>({
                     method: 'POST',
                     url: ApiEndpoints.ADMIN_WORK_SHIFTS,
                     baseUrl: appConfig.apiUrl,
@@ -150,8 +156,10 @@ test.describe('api/v2 admin shapes that setup, teardown and shared helpers rely 
                 });
 
                 expect(status).toBe(200);
-                workShiftId = WorkShiftResponseSchema.parse(body).data.id;
+                // Recorded before the parse, so a shape failure still cleans up.
+                workShiftId = body.data.id;
                 workShiftIdToDelete = workShiftId;
+                expect(WorkShiftResponseSchema.parse(body)).toBeTruthy();
             });
 
             await test.step('WHEN it is deleted', async () => {
