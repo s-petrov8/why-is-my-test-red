@@ -21,7 +21,7 @@ env/.env.*
 # Playwright CLI
 .playwright-cli/
 
-# Rendered with credentials by infra/start-orangehrm.sh
+# A rendered install config holds credentials
 infra/cli_install_config.yaml
 
 # Application logs collected in CI
