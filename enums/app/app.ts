@@ -26,6 +26,14 @@ export enum Messages {
     LOGIN_FAILED = 'Invalid credentials',
 
     // Employee details and reporting lines
+    /** Sign-in refusal for a user whose employee is terminated */
+    EMPLOYEE_TERMINATED = 'Employee is terminated',
+    /** Prefixes the termination date on the Job tab */
+    TERMINATED_ON = 'Terminated on',
+    /** Follows a terminated employee's last name in the employee list */
+    PAST_EMPLOYEE = '(Past Employee)',
+    /** Field validation message on the Terminate Employment form */
+    REQUIRED = 'Required',
 
     // Admin users and roles
 
@@ -114,6 +122,23 @@ export enum ReportingMethodIds {
     INDIRECT = 2,
 }
 
+/** Ids of the built-in termination reasons */
+export enum TerminationReasonIds {
+    OTHER = 1,
+}
+
+/** Names of the built-in termination reasons, as the Terminate Employment form lists them */
+export enum TerminationReasons {
+    OTHER = 'Other',
+}
+
+/** Options of the Include filter on the employee list */
+export enum EmployeeIncludeOptions {
+    CURRENT_ONLY = 'Current Employees Only',
+    CURRENT_AND_PAST = 'Current and Past Employees',
+    PAST_ONLY = 'Past Employees Only',
+}
+
 /** API endpoint paths */
 export enum ApiEndpoints {
     // Login
@@ -122,6 +147,8 @@ export enum ApiEndpoints {
     // Employee details and reporting lines
     PIM_EMPLOYEES = '/web/index.php/api/v2/pim/employees',
     PIM_SUPERVISORS_SUFFIX = '/supervisors',
+    PIM_JOB_DETAILS_SUFFIX = '/job-details',
+    PIM_TERMINATIONS_SUFFIX = '/terminations',
 
     // Admin users and roles
     ADMIN_USERS = '/web/index.php/api/v2/admin/users',
@@ -150,6 +177,7 @@ export enum Routes {
 
     // Employee details and reporting lines
     PIM_EMPLOYEE_LIST = '/web/index.php/pim/viewEmployeeList',
+    PIM_JOB_DETAILS = '/web/index.php/pim/viewJobDetails/empNumber',
 
     // Admin users and roles
 
@@ -157,6 +185,7 @@ export enum Routes {
     LEAVE_APPLY = '/web/index.php/leave/applyLeave',
     LEAVE_LIST = '/web/index.php/leave/viewLeaveList',
     LEAVE_MY_LIST = '/web/index.php/leave/viewMyLeaveList',
+    LEAVE_REQUEST_DETAILS = '/web/index.php/leave/viewLeaveRequest',
 }
 
 /** Storage state file paths */

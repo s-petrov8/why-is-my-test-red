@@ -3,6 +3,7 @@ import { ApiEndpoints } from '../../../enums/app/app';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import {
     DeleteEmployeesResponseSchema,
+    Employee,
     EmployeeResponseSchema,
 } from '../../../fixtures/api/schemas/app/employeeSchema';
 import { createEmployeeData } from '../../../test-data/factories/app/employee.factory';
@@ -66,16 +67,16 @@ test.describe('api/v2/pim/employees', () => {
                     ...createEmployeeData(),
                     ...invalidFields,
                 };
-                const { status, body } = await apiRequest({
+                const { status, body } = await apiRequest<{
+                    data?: Employee;
+                }>({
                     method: 'POST',
                     url: ApiEndpoints.PIM_EMPLOYEES,
                     baseUrl: appConfig.apiUrl,
                     body: requestBody,
                 });
-                if (status === 200) {
-                    const employeeResponse = EmployeeResponseSchema.parse(body);
-                    empNumberToClean = employeeResponse.data.empNumber;
-                }
+                // Only an accepted employee has data, and it needs removing.
+                empNumberToClean = body.data?.empNumber;
 
                 expect(status).toBe(422);
                 const error = InvalidParameterResponseSchema.parse(body);
@@ -83,6 +84,27 @@ test.describe('api/v2/pim/employees', () => {
             }
         );
     }
+
+    test(
+        'should reject an employee id another employee holds',
+        { tag: '@api' },
+        async ({ apiRequest, tempTestEmployee }) => {
+            const { status, body } = await apiRequest<{ data?: Employee }>({
+                method: 'POST',
+                url: ApiEndpoints.PIM_EMPLOYEES,
+                baseUrl: appConfig.apiUrl,
+                body: createEmployeeData({
+                    employeeId: tempTestEmployee.employeeId!,
+                }),
+            });
+            // Only an accepted employee has data, and it needs removing.
+            empNumberToClean = body.data?.empNumber;
+
+            expect(status).toBe(422);
+            const error = InvalidParameterResponseSchema.parse(body);
+            expect(error.error.data.invalidParamKeys).toEqual(['employeeId']);
+        }
+    );
 
     test(
         'should delete an employee',

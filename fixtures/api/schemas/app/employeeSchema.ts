@@ -108,6 +108,85 @@ export const SupervisorResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
+/**
+ * `DELETE /api/v2/pim/employees/{empNumber}/supervisors` -- returns the removed
+ * supervisors' employee numbers.
+ */
+export const DeleteSupervisorsResponseSchema = z.strictObject({
+    data: z.array(z.int()),
+    meta: z.array(z.unknown()),
+    rels: z.array(z.unknown()),
+});
+
+/** Payload accepted by `POST /api/v2/pim/employees/{empNumber}/terminations`. */
+export const CreateTerminationRequestSchema = z.strictObject({
+    terminationReasonId: z.int(),
+    date: z.iso.date(),
+    note: z.string().max(255).optional(),
+});
+
+/**
+ * A termination record, answered by `POST` and `DELETE` on
+ * `/api/v2/pim/employees/{empNumber}/terminations`. The annotations document the
+ * `DELETE` as answering a list of ids; the application answers the removed record.
+ */
+export const TerminationResponseSchema = z.strictObject({
+    data: z.strictObject({
+        id: z.int(),
+        note: z.string().nullable(),
+        date: z.iso.date(),
+        terminationReason: z.strictObject({
+            id: z.int(),
+            name: z.string(),
+        }),
+    }),
+    meta: z.strictObject({ empNumber: z.int() }),
+    rels: z.array(z.unknown()),
+});
+
+/**
+ * `GET /api/v2/pim/employees/{empNumber}/job-details`. Every field of a fresh
+ * employee is `null`, including the ids inside the nested objects.
+ */
+export const JobDetailsResponseSchema = z.strictObject({
+    data: z.strictObject({
+        empNumber: z.int(),
+        joinedDate: z.iso.date().nullable(),
+        jobTitle: z.strictObject({
+            id: z.int().nullable(),
+            title: z.string().nullable(),
+            isDeleted: z.boolean().nullable(),
+        }),
+        jobSpecificationAttachment: z.strictObject({
+            id: z.int().nullable(),
+            filename: z.string().nullable(),
+        }),
+        empStatus: z.strictObject({
+            id: z.int().nullable(),
+            name: z.string().nullable(),
+        }),
+        jobCategory: z.strictObject({
+            id: z.int().nullable(),
+            name: z.string().nullable(),
+        }),
+        subunit: z.strictObject({
+            id: z.int().nullable(),
+            name: z.string().nullable(),
+            unitId: z.int().nullable(),
+        }),
+        location: z.strictObject({
+            id: z.int().nullable(),
+            name: z.string().nullable(),
+        }),
+        employeeTerminationRecord: z.strictObject({
+            id: z.int().nullable(),
+            date: z.iso.date().nullable(),
+        }),
+    }),
+    meta: z.array(z.unknown()),
+    rels: z.array(z.unknown()),
+});
+
 // Type exports
 export type Employee = zOutput<typeof EmployeeSchema>;
 export type CreateEmployeeRequest = zOutput<typeof CreateEmployeeRequestSchema>;
@@ -118,3 +197,7 @@ export type DeleteEmployeesResponse = zOutput<
     typeof DeleteEmployeesResponseSchema
 >;
 export type SupervisorResponse = zOutput<typeof SupervisorResponseSchema>;
+export type CreateTerminationRequest = zOutput<
+    typeof CreateTerminationRequestSchema
+>;
+export type JobDetailsResponse = zOutput<typeof JobDetailsResponseSchema>;

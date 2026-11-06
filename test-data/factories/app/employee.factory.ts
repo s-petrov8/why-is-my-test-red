@@ -1,8 +1,12 @@
 import { faker } from '@faker-js/faker';
+import { TerminationReasonIds } from '../../../enums/app/app';
 import {
     CreateEmployeeRequest,
     CreateEmployeeRequestSchema,
+    CreateTerminationRequest,
+    CreateTerminationRequestSchema,
 } from '../../../fixtures/api/schemas/app/employeeSchema';
+import { formatIsoDate } from '../../../helpers/util/util';
 
 /**
  * Generates a valid employee creation payload with randomized data using Faker.
@@ -30,4 +34,30 @@ export const createEmployeeData = (
     const mergedEmployee = { ...defaultEmployee, ...overrides };
 
     return CreateEmployeeRequestSchema.parse(mergedEmployee);
+};
+
+/**
+ * Generates a valid termination payload, dated within the past year.
+ *
+ * @param {Partial<CreateTerminationRequest>} overrides - Optional values to override generated ones.
+ * @returns {CreateTerminationRequest} A valid payload matching the CreateTerminationRequestSchema.
+ *
+ * @example
+ * ```ts
+ * const termination = createTerminationData();
+ * ```
+ */
+export const createTerminationData = (
+    overrides?: Partial<CreateTerminationRequest>
+): CreateTerminationRequest => {
+    const defaultTermination: CreateTerminationRequest = {
+        terminationReasonId: TerminationReasonIds.OTHER,
+        date: formatIsoDate(faker.date.past()),
+        note: faker.lorem.sentence(),
+    };
+
+    return CreateTerminationRequestSchema.parse({
+        ...defaultTermination,
+        ...overrides,
+    });
 };
