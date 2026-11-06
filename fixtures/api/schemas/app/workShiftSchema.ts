@@ -25,6 +25,13 @@ export const WorkShiftResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
+/** `DELETE /api/v2/admin/work-shifts`: the ids that were deleted. */
+export const DeleteWorkShiftsResponseSchema = z.strictObject({
+    data: z.array(z.int()),
+    meta: z.array(z.unknown()),
+    rels: z.array(z.unknown()),
+});
+
 // Type exports
 export type CreateWorkShiftRequest = zOutput<
     typeof CreateWorkShiftRequestSchema

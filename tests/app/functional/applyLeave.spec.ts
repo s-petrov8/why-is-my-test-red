@@ -1,8 +1,6 @@
-import { appConfig } from '../../../config/app';
-import { ApiEndpoints, LeaveStatuses, Messages } from '../../../enums/app/app';
-import { MyLeaveRequestListResponseSchema } from '../../../fixtures/api/schemas/app/leaveSchema';
+import { LeaveStatuses, Messages } from '../../../enums/app/app';
 import { expect, test } from '../../../fixtures/pom/test-options';
-import { applyForLeave } from '../../../helpers/app/leave';
+import { applyForLeave, readMyLeaveRequests } from '../../../helpers/app/leave';
 import {
     formatIsoDate,
     formatLeaveDays,
@@ -123,16 +121,9 @@ test.describe('functional apply leave', () => {
             });
 
             await test.step('AND no second request exists', async () => {
-                const { status, body } = await employee.api({
-                    method: 'GET',
-                    url: ApiEndpoints.LEAVE_REQUESTS,
-                    baseUrl: appConfig.apiUrl,
-                });
+                const { meta } = await readMyLeaveRequests(employee.api);
 
-                expect(status).toBe(200);
-                expect(
-                    MyLeaveRequestListResponseSchema.parse(body).meta.total
-                ).toBe(1);
+                expect(meta.total).toBe(1);
             });
         }
     );

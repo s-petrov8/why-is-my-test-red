@@ -1,27 +1,22 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { ApiEndpoints, LeaveActions } from '../../enums/app/app';
-import type { ApiRequestFn } from '../../fixtures/api/api-types';
-import { BadRequestResponseSchema } from '../../fixtures/api/schemas/app/errorSchema';
-import {
+import type {
+    ApiRequestFn,
+    ApiRequestResponse,
+} from '../../fixtures/api/api-types';
+import type {
     ApplyLeaveRequest,
-    ApplyLeaveResponseSchema,
     CreateHolidayRequest,
     DetailedLeaveRequest,
-    DetailedLeaveRequestResponseSchema,
     Holiday,
-    HolidayResponseSchema,
     LeaveBalance,
     LeaveBalanceBreakdown,
-    LeaveBalanceBreakdownResponseSchema,
     LeaveDayList,
-    LeaveDayListResponseSchema,
     LeaveEntitlement,
-    LeaveEntitlementReadResponseSchema,
-    LeaveRequestResponseSchema,
     LeaveType,
+    MyLeaveRequestList,
     WorkWeek,
-    WorkWeekResponseSchema,
 } from '../../fixtures/api/schemas/app/leaveSchema';
 import { formatIsoDate, getLeavePeriod } from '../util/util';
 
@@ -201,6 +196,12 @@ export async function grantLeaveForDate(
     });
 }
 
+/*
+ * The calls tests share. As the project overrides in `AGENTS.md` require, they check
+ * the status and read only what they need: `leaveShapes.spec.ts` and the other owning
+ * tests validate the shapes.
+ */
+
 /**
  * Applies for leave as the caller and returns the raw answer, for a test of a
  * refusal. To apply and carry on, use {@link applyForLeave}.
@@ -209,11 +210,11 @@ export async function grantLeaveForDate(
  * @param {ApplyLeaveRequest} leaveRequest - The leave to apply for.
  * @returns The status and body of the response.
  */
-export function submitLeaveRequest(
+export function submitLeaveRequest<T = unknown>(
     api: ApiRequestFn,
     leaveRequest: ApplyLeaveRequest
-): ReturnType<ApiRequestFn> {
-    return api({
+): Promise<ApiRequestResponse<T>> {
+    return api<T>({
         method: 'POST',
         url: ApiEndpoints.LEAVE_REQUESTS,
         baseUrl: appConfig.apiUrl,
@@ -232,11 +233,13 @@ export async function applyForLeave(
     api: ApiRequestFn,
     leaveRequest: ApplyLeaveRequest
 ): Promise<number> {
-    const { status, body } = await submitLeaveRequest(api, leaveRequest);
+    const { status, body } = await submitLeaveRequest<{
+        data: { id: number };
+    }>(api, leaveRequest);
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return ApplyLeaveResponseSchema.parse(body).data.id;
+    return body.data.id;
 }
 
 /**
@@ -245,13 +248,16 @@ export async function applyForLeave(
  *
  * @param {object} response - The raw answer.
  * @param {number} response.status - Its status.
- * @param {unknown} response.body - Its body.
+ * @param {object} response.body - Its body.
  * @returns {string} The message naming the rule that refused the call.
  */
-export function refusalOf(response: { status: number; body: unknown }): string {
-    expect(response.status).toBe(400);
+export function refusalOf(response: {
+    status: number;
+    body: { error: { message: string } };
+}): string {
+    expect(response.status, JSON.stringify(response.body)).toBe(400);
 
-    return BadRequestResponseSchema.parse(response.body).error.message;
+    return response.body.error.message;
 }
 
 /**
@@ -270,7 +276,7 @@ export async function readLeaveBalanceForRange(
     fromDate: Date,
     toDate: Date
 ): Promise<LeaveBalanceBreakdown> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: LeaveBalanceBreakdown }>({
         method: 'GET',
         url: `${ApiEndpoints.LEAVE_BALANCE_BY_TYPE}/${leaveTypeId}?fromDate=${formatIsoDate(fromDate)}&toDate=${formatIsoDate(toDate)}`,
         baseUrl: appConfig.apiUrl,
@@ -278,7 +284,7 @@ export async function readLeaveBalanceForRange(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return LeaveBalanceBreakdownResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**
@@ -304,8 +310,6 @@ export async function readLeaveBalance(
         date
     );
 
-    expect(breakdown).toHaveLength(1);
-
     return breakdown[0].balance;
 }
 
@@ -320,7 +324,7 @@ export async function readEntitlement(
     api: ApiRequestFn,
     entitlementId: number
 ): Promise<LeaveEntitlement> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: LeaveEntitlement }>({
         method: 'GET',
         url: `${ApiEndpoints.LEAVE_ENTITLEMENTS}/${entitlementId}`,
         baseUrl: appConfig.apiUrl,
@@ -328,7 +332,7 @@ export async function readEntitlement(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return LeaveEntitlementReadResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**
@@ -344,7 +348,7 @@ export async function readLeaveRequest(
     leaveRequestId: number,
     endpoint: ApiEndpoints = ApiEndpoints.LEAVE_EMPLOYEE_REQUESTS
 ): Promise<DetailedLeaveRequest> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: DetailedLeaveRequest }>({
         method: 'GET',
         url: `${endpoint}/${leaveRequestId}?model=detailed`,
         baseUrl: appConfig.apiUrl,
@@ -352,7 +356,7 @@ export async function readLeaveRequest(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return DetailedLeaveRequestResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**
@@ -379,13 +383,13 @@ export function allowedActionsOf(
  * @param {ApiEndpoints} [endpoint] - `LEAVE_REQUESTS` for an employee's own request.
  * @returns The status and body of the response.
  */
-export function submitLeaveAction(
+export function submitLeaveAction<T = unknown>(
     api: ApiRequestFn,
     leaveRequestId: number,
     action: LeaveActions,
     endpoint: ApiEndpoints = ApiEndpoints.LEAVE_EMPLOYEE_REQUESTS
-): ReturnType<ApiRequestFn> {
-    return api({
+): Promise<ApiRequestResponse<T>> {
+    return api<T>({
         method: 'PUT',
         url: `${endpoint}/${leaveRequestId}`,
         baseUrl: appConfig.apiUrl,
@@ -416,7 +420,27 @@ export async function changeLeaveRequest(
     );
 
     expect(status, JSON.stringify(body)).toBe(200);
-    expect(LeaveRequestResponseSchema.parse(body).data.id).toBe(leaveRequestId);
+}
+
+/**
+ * Reads the caller's own leave requests, in every status. A list read is also what
+ * moves approved leave whose date has passed to Taken.
+ *
+ * @param {ApiRequestFn} api - The API, signed in as the employee.
+ * @returns {Promise<MyLeaveRequestList>} The requests and their total.
+ */
+export async function readMyLeaveRequests(
+    api: ApiRequestFn
+): Promise<MyLeaveRequestList> {
+    const { status, body } = await api<MyLeaveRequestList>({
+        method: 'GET',
+        url: ApiEndpoints.LEAVE_REQUESTS,
+        baseUrl: appConfig.apiUrl,
+    });
+
+    expect(status, JSON.stringify(body)).toBe(200);
+
+    return body;
 }
 
 /**
@@ -430,7 +454,7 @@ export async function readLeaveDays(
     api: ApiRequestFn,
     leaveRequestId: number
 ): Promise<LeaveDayList> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: LeaveDayList }>({
         method: 'GET',
         url: `${ApiEndpoints.LEAVE_REQUESTS}/${leaveRequestId}${ApiEndpoints.LEAVE_DAYS_SUFFIX}`,
         baseUrl: appConfig.apiUrl,
@@ -438,7 +462,7 @@ export async function readLeaveDays(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return LeaveDayListResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**
@@ -453,7 +477,7 @@ export async function createHoliday(
     api: ApiRequestFn,
     holiday: CreateHolidayRequest
 ): Promise<Holiday> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: Holiday }>({
         method: 'POST',
         url: ApiEndpoints.LEAVE_HOLIDAYS,
         baseUrl: appConfig.apiUrl,
@@ -462,7 +486,7 @@ export async function createHoliday(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return HolidayResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**
@@ -493,7 +517,7 @@ export async function deleteHolidays(
  * @returns {Promise<WorkWeek>} The length of each weekday.
  */
 export async function readWorkWeek(api: ApiRequestFn): Promise<WorkWeek> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: WorkWeek }>({
         method: 'GET',
         url: ApiEndpoints.LEAVE_WORK_WEEK,
         baseUrl: appConfig.apiUrl,
@@ -501,7 +525,7 @@ export async function readWorkWeek(api: ApiRequestFn): Promise<WorkWeek> {
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return WorkWeekResponseSchema.parse(body).data;
+    return body.data;
 }
 
 /**

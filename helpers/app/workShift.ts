@@ -2,10 +2,7 @@ import { expect } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { ApiEndpoints } from '../../enums/app/app';
 import type { ApiRequestFn } from '../../fixtures/api/api-types';
-import {
-    CreateWorkShiftRequest,
-    WorkShiftResponseSchema,
-} from '../../fixtures/api/schemas/app/workShiftSchema';
+import type { CreateWorkShiftRequest } from '../../fixtures/api/schemas/app/workShiftSchema';
 
 /**
  * Creates a work shift and assigns employees to it.
@@ -18,7 +15,7 @@ export async function createWorkShift(
     api: ApiRequestFn,
     workShift: CreateWorkShiftRequest
 ): Promise<number> {
-    const { status, body } = await api({
+    const { status, body } = await api<{ data: { id: number } }>({
         method: 'POST',
         url: ApiEndpoints.ADMIN_WORK_SHIFTS,
         baseUrl: appConfig.apiUrl,
@@ -27,11 +24,11 @@ export async function createWorkShift(
 
     expect(status, JSON.stringify(body)).toBe(200);
 
-    return WorkShiftResponseSchema.parse(body).data.id;
+    return body.data.id;
 }
 
 /**
- * Deletes a work shift, as cleanup: it checks only the status.
+ * Deletes a work shift.
  *
  * @param {ApiRequestFn} api - The API, signed in as an administrator.
  * @param {number} id - The shift.

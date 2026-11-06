@@ -308,6 +308,22 @@ export const LeaveDayResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
+/** `GET`, `PUT /api/v2/leave/leave-period`. */
+export const LeavePeriodResponseSchema = z.strictObject({
+    data: z.strictObject({
+        startMonth: z.int(),
+        startDay: z.int(),
+        createdAt: z.string(),
+    }),
+    meta: z.strictObject({
+        leavePeriodDefined: z.boolean(),
+        currentLeavePeriod: z
+            .strictObject({ startDate: z.string(), endDate: z.string() })
+            .nullable(),
+    }),
+    rels: z.array(z.unknown()),
+});
+
 /** A holiday. `length` is `HolidayLengths`. */
 export const HolidaySchema = z.strictObject({
     id: z.int(),
@@ -371,6 +387,9 @@ export type LeaveEntitlementResponse = zOutput<
 export type ApplyLeaveRequest = zOutput<typeof ApplyLeaveRequestSchema>;
 export type ApplyLeaveResponse = zOutput<typeof ApplyLeaveResponseSchema>;
 export type LeaveBalance = zOutput<typeof LeaveBalanceSchema>;
+export type MyLeaveRequestList = zOutput<
+    typeof MyLeaveRequestListResponseSchema
+>;
 export type LeaveBalanceBreakdown = zOutput<
     typeof LeaveBalanceBreakdownResponseSchema
 >['data'];

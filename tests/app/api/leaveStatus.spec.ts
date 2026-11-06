@@ -7,14 +7,8 @@ import {
     LeaveStatuses,
     UserRoleIds,
 } from '../../../enums/app/app';
-import {
-    ForbiddenResponseSchema,
-    InvalidParameterResponseSchema,
-} from '../../../fixtures/api/schemas/app/errorSchema';
-import {
-    LeaveDayResponseSchema,
-    MyLeaveRequestListResponseSchema,
-} from '../../../fixtures/api/schemas/app/leaveSchema';
+import { ForbiddenResponseSchema } from '../../../fixtures/api/schemas/app/errorSchema';
+import { LeaveDayResponseSchema } from '../../../fixtures/api/schemas/app/leaveSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import {
     allowedActionsOf,
@@ -22,6 +16,7 @@ import {
     changeLeaveRequest,
     readLeaveBalance,
     readLeaveDays,
+    readMyLeaveRequests,
     readLeaveRequest,
     submitLeaveAction,
     refusalOf,
@@ -420,7 +415,9 @@ test.describe('api/v2/leave status changes and access', () => {
             });
 
             await test.step('WHEN a supervisor of someone else assigns them leave, THEN the employee is invalid', async () => {
-                const { status, body } = await otherSupervisor.api({
+                const { status, body } = await otherSupervisor.api<{
+                    error: { data: { invalidParamKeys: string[] } };
+                }>({
                     method: 'POST',
                     url: ApiEndpoints.LEAVE_EMPLOYEE_REQUESTS,
                     baseUrl: appConfig.apiUrl,
@@ -434,10 +431,7 @@ test.describe('api/v2/leave status changes and access', () => {
                 });
 
                 expect(status).toBe(422);
-                expect(
-                    InvalidParameterResponseSchema.parse(body).error.data
-                        .invalidParamKeys
-                ).toEqual(['empNumber']);
+                expect(body.error.data.invalidParamKeys).toEqual(['empNumber']);
             });
 
             await test.step('WHEN a stranger with no team assigns them leave, THEN it is forbidden', async () => {
@@ -503,14 +497,8 @@ test.describe('api/v2/leave status changes and access', () => {
             });
 
             await test.step('WHEN the list is read, THEN the leave is taken', async () => {
-                const { status, body } = await employee.api({
-                    method: 'GET',
-                    url: ApiEndpoints.LEAVE_REQUESTS,
-                    baseUrl: appConfig.apiUrl,
-                });
+                const list = await readMyLeaveRequests(employee.api);
 
-                expect(status).toBe(200);
-                const list = MyLeaveRequestListResponseSchema.parse(body);
                 expect(list.data[0].leaveBreakdown).toEqual([
                     expect.objectContaining({ name: LeaveStatuses.TAKEN }),
                 ]);

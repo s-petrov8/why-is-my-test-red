@@ -246,9 +246,10 @@ test.describe('api/v2/leave working days and holidays', () => {
                     friday: WorkWeekDayLengths.HALF_DAY,
                 });
 
-                expect(WorkWeekResponseSchema.parse(body).data.friday).toBe(
-                    WorkWeekDayLengths.HALF_DAY
-                );
+                expect(WorkWeekResponseSchema.parse(body).data).toEqual({
+                    ...workWeek,
+                    friday: WorkWeekDayLengths.HALF_DAY,
+                });
             });
 
             await test.step('WHEN the employee applies for the whole Friday', async () => {
