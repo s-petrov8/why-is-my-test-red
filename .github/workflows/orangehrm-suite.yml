@@ -59,10 +59,37 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            # This usually takes under a minute, but the apt download can hang.
+            # Some jobs get about 40 kB/s from the Ubuntu mirror for their whole run, so the
+            # 21 MB of font packages takes about 10 minutes. The cache skips that download.
+            - name: Restore apt packages
+              id: apt-cache
+              uses: actions/cache/restore@v6
+              with:
+                  path: ~/apt-archives
+                  key: chromium-apt-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
+
+            - name: Load cached apt packages
+              if: steps.apt-cache.outputs.cache-hit == 'true'
+              run: sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/
+
+            # The limit leaves room for a slow download when the cache is empty.
             - name: Install Chromium
-              timeout-minutes: 5
+              timeout-minutes: 15
               run: npx playwright install --with-deps chromium
+
+            - name: Collect apt packages
+              if: steps.apt-cache.outputs.cache-hit != 'true'
+              run: |
+                  mkdir -p ~/apt-archives
+                  find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t ~/apt-archives {} +
+
+            # Saved here, not at job end, because the suite's known failure would skip a later save.
+            - name: Save apt packages
+              if: steps.apt-cache.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v6
+              with:
+                  path: ~/apt-archives
+                  key: ${{ steps.apt-cache.outputs.cache-primary-key }}
 
             # Generated per run: the instance lives only on this runner.
             - name: Generate throwaway credentials
