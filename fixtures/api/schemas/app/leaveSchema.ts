@@ -19,13 +19,6 @@ export const LeaveTypeListResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
-/** `POST /api/v2/leave/leave-types` -- single resource, `meta` is empty. */
-export const LeaveTypeResponseSchema = z.strictObject({
-    data: LeaveTypeSchema,
-    meta: z.array(z.unknown()),
-    rels: z.array(z.unknown()),
-});
-
 /** How an entitlement came to exist, e.g. `Added` for one granted by an admin. */
 export const EntitlementTypeSchema = z.strictObject({
     id: z.int(),
@@ -128,7 +121,6 @@ export const SupervisorResponseSchema = z.strictObject({
 // Type exports
 export type LeaveType = zOutput<typeof LeaveTypeSchema>;
 export type LeaveTypeListResponse = zOutput<typeof LeaveTypeListResponseSchema>;
-export type LeaveTypeResponse = zOutput<typeof LeaveTypeResponseSchema>;
 export type LeaveEntitlement = zOutput<typeof LeaveEntitlementSchema>;
 export type CreateLeaveEntitlementRequest = zOutput<
     typeof CreateLeaveEntitlementRequestSchema

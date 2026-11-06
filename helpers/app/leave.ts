@@ -4,7 +4,6 @@ import { InvalidParameterResponseSchema } from '../../fixtures/api/schemas/app/e
 import {
     LeaveEntitlementResponseSchema,
     LeaveTypeListResponseSchema,
-    LeaveTypeResponseSchema,
     SupervisorResponseSchema,
 } from '../../fixtures/api/schemas/app/leaveSchema';
 import { formatIsoDate } from '../util/util';
@@ -13,9 +12,10 @@ import { formatIsoDate } from '../util/util';
 const LEAVE_TYPE_LOOKUP_LIMIT = 50;
 
 /**
- * Tries to create a leave type. The application answers 422 on `name` when a
- * leave type already has that name, which is not proof it's a usable one, so
- * the caller confirms that with `assertLeaveTypeExists`.
+ * Tries to create a leave type. A 200 is checked by status only, as the project
+ * overrides in `AGENTS.md` require. The application answers 422 on `name` when a
+ * leave type already has that name, which is not proof it's a usable one, so the
+ * caller confirms that with `assertLeaveTypeExists`.
  *
  * @param {APIRequestContext} context - An authenticated request context.
  * @param {object} leaveType - The leave type to create.
@@ -30,19 +30,17 @@ export async function createLeaveType(
     const response = await context.post(ApiEndpoints.LEAVE_TYPES, {
         data: leaveType,
     });
-    const body: unknown = await response.json();
 
     if (response.ok()) {
         expect(response.status()).toBe(200);
-        expect(LeaveTypeResponseSchema.parse(body)).toBeTruthy();
-        expect(body).toMatchObject({ data: leaveType });
 
         return true;
     }
 
     expect(response.status()).toBe(422);
     expect(
-        InvalidParameterResponseSchema.parse(body).error.data.invalidParamKeys
+        InvalidParameterResponseSchema.parse(await response.json()).error.data
+            .invalidParamKeys
     ).toEqual(['name']);
 
     return false;
