@@ -48,9 +48,9 @@ export const UserListResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
-/** `DELETE /api/v2/admin/users` -- returns the deleted ids as strings, not numbers. */
+/** `DELETE /api/v2/admin/users` -- returns the deleted ids as numbers. */
 export const DeleteUsersResponseSchema = z.strictObject({
-    data: z.array(z.string()),
+    data: z.array(z.number()),
     meta: z.array(z.unknown()),
     rels: z.array(z.unknown()),
 });

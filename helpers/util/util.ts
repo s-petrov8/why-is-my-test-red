@@ -17,15 +17,15 @@ function padDatePart(value: number): string {
 }
 
 /**
- * Formats a date the way the application's date INPUTS render and accept it:
- * `yyyy-dd-mm` -- year, then DAY, then month.
+ * Formats a date the way a fresh install's date INPUTS render and accept it:
+ * `yyyy-mm-dd`.
  *
  * @param {Date} date - The date to format.
- * @returns {string} The date as `yyyy-dd-mm`.
+ * @returns {string} The date as `yyyy-mm-dd`.
  *
  * @example
  * ```ts
- * formatAppDate(new Date(2026, 8, 21)); // '2026-21-09' -- 21 September 2026
+ * formatAppDate(new Date(2026, 8, 21)); // '2026-09-21' -- 21 September 2026
  * ```
  */
 export function formatAppDate(date: Date): string {
@@ -33,7 +33,7 @@ export function formatAppDate(date: Date): string {
     const month = padDatePart(date.getMonth() + 1);
     const day = padDatePart(date.getDate());
 
-    return `${year}-${day}-${month}`;
+    return `${year}-${month}-${day}`;
 }
 
 /**
