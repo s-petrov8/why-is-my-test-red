@@ -6,6 +6,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Without a project name every checkout is the project "infra", so a second
+# instance would replace the first one's containers while its suite runs.
+if [[ "${OHRM_PORT:-8080}" != "8080" && -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
+    echo "OHRM_PORT=$OHRM_PORT needs COMPOSE_PROJECT_NAME too, or this instance would replace another one's containers." >&2
+    echo "For example: COMPOSE_PROJECT_NAME=ohrm-b OHRM_PORT=$OHRM_PORT infra/start-orangehrm.sh" >&2
+    exit 1
+fi
+
 # The rendered config holds credentials and belongs to one instance, so it lives
 # in a private temp file and is copied into that instance's container.
 install_config="$(mktemp)"
