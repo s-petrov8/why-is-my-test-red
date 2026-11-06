@@ -1,0 +1,93 @@
+# Runs the suite against a private OrangeHRM, one fresh instance per run.
+name: OrangeHRM suite
+
+on:
+    workflow_dispatch:
+        inputs:
+            ohrm_version:
+                description: OrangeHRM image tag
+                default: '5.9'
+            runs:
+                description: Number of independent runs, each on a fresh instance
+                default: '1'
+            debug_logs:
+                description: Run OrangeHRM in debug mode, which changes its logging
+                type: boolean
+                default: false
+
+jobs:
+    plan:
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.matrix.outputs.value }}
+        steps:
+            - id: matrix
+              env:
+                  RUNS: ${{ inputs.runs }}
+              run: echo "value=$(seq 1 "$RUNS" | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+    suite:
+        needs: plan
+        name: Run ${{ matrix.run }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                run: ${{ fromJson(needs.plan.outputs.matrix) }}
+        env:
+            OHRM_VERSION: ${{ inputs.ohrm_version }}
+            OHRM_DEBUG: ${{ inputs.debug_logs }}
+            ADMIN_USERNAME: Admin
+            APP_URL: http://localhost:8080
+            API_URL: http://localhost:8080
+            PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report/results.json
+
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Install Chromium
+              run: npx playwright install --with-deps chromium
+
+            # Generated per run: the instance lives only on this runner.
+            - name: Generate throwaway credentials
+              run: |
+                  db_password="$(openssl rand -hex 16)"
+                  admin_password="Ci-$(openssl rand -hex 12)-Aa1"
+                  echo "::add-mask::$db_password"
+                  echo "::add-mask::$admin_password"
+                  echo "DB_ROOT_PASSWORD=$db_password" >> "$GITHUB_ENV"
+                  echo "ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+
+            - name: Start OrangeHRM
+              run: infra/start-orangehrm.sh
+
+            - name: Run Playwright tests
+              run: npx playwright test --reporter=json,html
+
+            - name: Collect application logs
+              if: ${{ !cancelled() }}
+              working-directory: infra
+              run: |
+                  mkdir -p ../app-logs
+                  docker compose logs --timestamps --no-color > ../app-logs/containers.log || true
+                  docker compose cp app:/var/www/html/src/log ../app-logs/orangehrm || true
+
+            - name: Upload evidence
+              if: ${{ !cancelled() }}
+              uses: actions/upload-artifact@v7
+              with:
+                  name: evidence-run-${{ matrix.run }}
+                  path: |
+                      playwright-report/
+                      test-results/
+                      app-logs/
+                  retention-days: 30

@@ -1,0 +1,28 @@
+# Playwright
+node_modules
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.auth/
+tests-cases/
+test-downloads/
+
+# Environment files (keep .env.example as template)
+env/.env.*
+!env/.env.example
+
+# Dev Container logs
+.devcontainer/*.log
+
+# macOS
+.DS_Store
+
+# Playwright CLI
+.playwright-cli/
+
+# Rendered with credentials by infra/start-orangehrm.sh
+infra/cli_install_config.yaml
+
+# Application logs collected in CI
+/app-logs/

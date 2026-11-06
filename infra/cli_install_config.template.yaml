@@ -1,0 +1,29 @@
+# Rendered with envsubst into cli_install_config.yaml, which is git-ignored.
+database:
+    hostName: db
+    hostPort: 3306
+    databaseName: orangehrm
+    privilegedDatabaseUser: root
+    privilegedDatabasePassword: ${DB_ROOT_PASSWORD}
+    useSameDbUserForOrangeHRM: y
+    orangehrmDatabaseUser: ~
+    orangehrmDatabasePassword: ~
+    isExistingDatabase: n
+    enableDataEncryption: n
+
+organization:
+    name: Test Organisation
+    country: US
+
+admin:
+    adminUserName: ${ADMIN_USERNAME}
+    adminPassword: ${ADMIN_PASSWORD}
+    adminEmployeeFirstName: Test
+    adminEmployeeLastName: Admin
+    workEmail: admin@example.com
+    contactNumber: ~
+    # Keeps a throwaway install from registering itself with OrangeHRM.
+    registrationConsent: false
+
+license:
+    agree: y

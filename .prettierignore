@@ -1,0 +1,10 @@
+# Build outputs / generated artifacts
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+.playwright-cli/
+
+# Lockfiles
+package-lock.json
