@@ -25,7 +25,7 @@ test.describe('api/v2/pim/employees', () => {
             });
             expect(status).toBe(200);
             const deleteResponse = DeleteEmployeesResponseSchema.parse(body);
-            expect(deleteResponse.data).toEqual([String(id)]);
+            expect(deleteResponse.data).toEqual([id]);
         }
     });
 
@@ -103,7 +103,7 @@ test.describe('api/v2/pim/employees', () => {
                 expect(status).toBe(200);
                 const deleteResponse =
                     DeleteEmployeesResponseSchema.parse(body);
-                expect(deleteResponse.data).toEqual([String(empNumber)]);
+                expect(deleteResponse.data).toEqual([empNumber]);
             });
 
             await test.step('THEN the employee can no longer be retrieved', async () => {

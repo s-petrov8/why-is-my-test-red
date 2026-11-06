@@ -79,9 +79,9 @@ export const EmployeeListResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
-/** `DELETE /api/v2/pim/employees` -- returns the deleted ids as strings, not numbers. */
+/** `DELETE /api/v2/pim/employees` -- returns the deleted ids as numbers. */
 export const DeleteEmployeesResponseSchema = z.strictObject({
-    data: z.array(z.string()),
+    data: z.array(z.number()),
     meta: z.array(z.unknown()),
     rels: z.array(z.unknown()),
 });

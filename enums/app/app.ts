@@ -42,6 +42,7 @@ export enum ApiEndpoints {
     PIM_EMPLOYEES = '/web/index.php/api/v2/pim/employees',
     PIM_SUPERVISORS_SUFFIX = '/supervisors',
     ADMIN_USERS = '/web/index.php/api/v2/admin/users',
+    LEAVE_PERIOD = '/web/index.php/api/v2/leave/leave-period',
     LEAVE_TYPES = '/web/index.php/api/v2/leave/leave-types',
     LEAVE_ENTITLEMENTS = '/web/index.php/api/v2/leave/leave-entitlements',
     LEAVE_REQUESTS = '/web/index.php/api/v2/leave/leave-requests',
