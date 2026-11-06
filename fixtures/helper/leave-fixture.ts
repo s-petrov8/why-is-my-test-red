@@ -1,17 +1,37 @@
+import { expect } from '@playwright/test';
+import { ApiEndpoints } from '../../enums/app/app';
 import { createAuthenticatedContext } from '../../helpers/app/createStorageState';
 import {
-    assignSupervisor,
     grantLeaveEntitlement,
     resolveLeaveType,
 } from '../../helpers/app/leave';
-import { TempUser } from '../../helpers/app/tempUser';
-import { getFutureWeekday, getLeavePeriod } from '../../helpers/util/util';
-import { test as userTest } from './user-fixture';
+import { assignSupervisor } from '../../helpers/app/reportingLine';
+import { TempUser, TempUserOptions } from '../../helpers/app/tempUser';
+import {
+    getFutureWeekday,
+    getLeavePeriod,
+    getLeaveWeek,
+} from '../../helpers/util/util';
+import { createLeaveTypeName } from '../../test-data/factories/app/leave.factory';
+import {
+    DeleteLeaveRecordsResponseSchema,
+    LeaveTypeResponseSchema,
+} from '../api/schemas/app/leaveSchema';
+import { ApiUser, test as userTest } from './user-fixture';
 
 /** Leave helper fixtures: the preconditions the leave workflow needs before it */
 
 /** Days of leave granted to a temporary user -- enough for any single request. */
 const ENTITLEMENT_DAYS = 5;
+
+/** An id for a leave type and the name the Leave screens show for it. */
+export type LeaveTypeRef = { id: number; name: string };
+
+/** An employee holding an entitlement, with the API signed in as them. */
+export type LeaveEmployee = ApiUser & {
+    /** The entitlement granted to them. Absent when `days` was zero. */
+    entitlementId?: number;
+};
 
 /** How far ahead a temporary user's leave is booked, before weekend adjustment. */
 const LEAVE_DAYS_AHEAD = 14;
@@ -30,11 +50,25 @@ export type LeaveApprovalUsers = {
     leaveDate: Date;
     /** The leave period containing `leaveDate`, for filtering the Leave List. */
     leavePeriod: { fromDate: Date; toDate: Date };
+    /** The days the applicant holds. */
+    entitledDays: number;
 };
 
 export type LeaveFixtures = {
     /** An applicant and their supervisor, with entitlement and reporting line. */
     tempLeaveApprovalUsers: LeaveApprovalUsers;
+    /** The shared leave type. A fresh employee per test isolates its balances. */
+    leaveType: LeaveTypeRef;
+    /** A leave type of the test's own, deleted afterwards. Its name stays taken. */
+    newLeaveType: () => Promise<LeaveTypeRef>;
+    /** A new employee holding `days` of the shared leave type, 5 by default. */
+    newLeaveEmployee: (
+        options?: TempUserOptions & {
+            days?: number;
+            /** A date in the leave period to grant for. By default, `getLeaveWeek`'s. */
+            entitledOn?: Date;
+        }
+    ) => Promise<LeaveEmployee>;
 };
 
 // ==================== Fixtures ====================
@@ -79,9 +113,69 @@ export const test = userTest.extend<LeaveFixtures>({
                 leaveTypeName: leaveType.name,
                 leaveDate,
                 leavePeriod,
+                entitledDays: ENTITLEMENT_DAYS,
             });
         } finally {
             await context.dispose();
         }
+    },
+    leaveType: async ({ adminContext }, use) => {
+        await use(await resolveLeaveType(adminContext));
+    },
+    newLeaveType: async ({ adminContext }, use) => {
+        const created: number[] = [];
+
+        await use(async (): Promise<LeaveTypeRef> => {
+            const response = await adminContext.post(ApiEndpoints.LEAVE_TYPES, {
+                data: { name: createLeaveTypeName(), situational: false },
+            });
+
+            expect(response.status()).toBe(200);
+
+            const leaveType = LeaveTypeResponseSchema.parse(
+                await response.json()
+            ).data;
+
+            created.push(leaveType.id);
+
+            return { id: leaveType.id, name: leaveType.name };
+        });
+
+        if (created.length > 0) {
+            const response = await adminContext.delete(
+                ApiEndpoints.LEAVE_TYPES,
+                {
+                    data: { ids: created },
+                }
+            );
+
+            expect(response.status()).toBe(200);
+            expect(
+                DeleteLeaveRecordsResponseSchema.parse(await response.json())
+            ).toBeTruthy();
+        }
+    },
+    newLeaveEmployee: async ({ adminContext, newApiUser, leaveType }, use) => {
+        await use(async (options) => {
+            const {
+                days = ENTITLEMENT_DAYS,
+                entitledOn = getLeaveWeek().monday,
+                ...userOptions
+            } = options ?? {};
+            const employee = await newApiUser(userOptions);
+
+            if (days === 0) {
+                return employee;
+            }
+
+            const entitlement = await grantLeaveEntitlement(adminContext, {
+                empNumber: employee.empNumber,
+                leaveTypeId: leaveType.id,
+                ...getLeavePeriod(entitledOn),
+                days,
+            });
+
+            return { ...employee, entitlementId: entitlement.id };
+        });
     },
 });

@@ -24,6 +24,28 @@ export const SessionExpiredResponseSchema = z.strictObject({
 });
 
 /**
+ * 400 -- returned when a business rule refuses the call. `message` names the rule,
+ * and `status` is the STRING `'400'`.
+ */
+export const BadRequestResponseSchema = z.strictObject({
+    error: z.strictObject({
+        status: z.literal('400'),
+        message: z.string(),
+    }),
+});
+
+/**
+ * 403 -- returned when the caller has no access to the record. `status` is the
+ * NUMBER `403`.
+ */
+export const ForbiddenResponseSchema = z.strictObject({
+    error: z.strictObject({
+        status: z.literal(403),
+        message: z.string(),
+    }),
+});
+
+/**
  * 404 -- returned by `DELETE /pim/employees` when no listed id resolves, e.g. the
  * record was already removed.
  *
@@ -55,6 +77,8 @@ export const InvalidParameterResponseSchema = z.strictObject({
 export type SessionExpiredResponse = zOutput<
     typeof SessionExpiredResponseSchema
 >;
+export type BadRequestResponse = zOutput<typeof BadRequestResponseSchema>;
+export type ForbiddenResponse = zOutput<typeof ForbiddenResponseSchema>;
 export type RecordsNotFoundResponse = zOutput<
     typeof RecordsNotFoundResponseSchema
 >;

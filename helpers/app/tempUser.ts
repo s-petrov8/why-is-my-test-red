@@ -5,7 +5,7 @@ import {
     expect,
     Page,
 } from '@playwright/test';
-import { ApiEndpoints } from '../../enums/app/app';
+import { ApiEndpoints, UserRoleIds } from '../../enums/app/app';
 import { createAuthenticatedContext } from './createStorageState';
 import { createEmployeeData } from '../../test-data/factories/app/employee.factory';
 import { createUserData } from '../../test-data/factories/app/user.factory';
@@ -39,19 +39,27 @@ export type TempUser = {
     employeeFullName: string;
 };
 
+/** What can differ from a plain ESS account. */
+export type TempUserOptions = {
+    userRoleId?: UserRoleIds;
+};
+
 /**
  * Creates an employee together with an ESS account that signs in as them.
  *
  * @param {APIRequestContext} context - An authenticated request context.
+ * @param {TempUserOptions} [options] - What differs from a plain ESS account.
  * @returns {Promise<TempUser>} The created person and their credentials.
  *
  * @example
  * ```ts
  * const applicant = await createTempUser(context);
+ * const admin = await createTempUser(context, { userRoleId: UserRoleIds.ADMIN });
  * ```
  */
 export async function createTempUser(
-    context: APIRequestContext
+    context: APIRequestContext,
+    options?: TempUserOptions
 ): Promise<TempUser> {
     const employeeResponse = await context.post(ApiEndpoints.PIM_EMPLOYEES, {
         data: createEmployeeData(),
@@ -63,7 +71,7 @@ export async function createTempUser(
         await employeeResponse.json()
     ).data;
 
-    const userPayload = createUserData(employee.empNumber);
+    const userPayload = createUserData(employee.empNumber, options);
     const userResponse = await context.post(ApiEndpoints.ADMIN_USERS, {
         data: userPayload,
     });

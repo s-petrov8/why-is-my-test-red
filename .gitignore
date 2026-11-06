@@ -29,6 +29,7 @@ infra/cli_install_config.yaml
 
 # Claude Code
 .claude/projects/
+.claude/worktrees/
 .claude/skills/ai-native-workflow-workspace/
 
 # Python bytecode (hook scripts)

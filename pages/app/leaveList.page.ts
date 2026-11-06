@@ -78,6 +78,17 @@ export class LeaveListPage {
         });
     }
 
+    private actionsMenuForEmployee(employeeName: string): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the actions menu button has an icon and no accessible name
+        return this.rowForEmployee(employeeName).locator(
+            'button.oxd-icon-button'
+        );
+    }
+
+    private get viewDetailsMenuItem(): Locator {
+        return this.page.getByText(Messages.LEAVE_VIEW_DETAILS);
+    }
+
     // ==================== Feedback Locators ====================
 
     get toast(): Locator {
@@ -157,5 +168,16 @@ export class LeaveListPage {
      */
     async approveLeaveFor(employeeName: string): Promise<void> {
         await this.approveButtonForEmployee(employeeName).click();
+    }
+
+    /**
+     * Opens the details page of the pending request belonging to one employee.
+     *
+     * @param {string} employeeName - Full name as the results table renders it.
+     * @returns {Promise<void>} Resolves once the menu item is clicked.
+     */
+    async openDetailsFor(employeeName: string): Promise<void> {
+        await this.actionsMenuForEmployee(employeeName).click();
+        await this.viewDetailsMenuItem.click();
     }
 }
