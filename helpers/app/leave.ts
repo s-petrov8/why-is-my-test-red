@@ -2,13 +2,63 @@ import { APIRequestContext, expect } from '@playwright/test';
 import { ApiEndpoints, ReportingMethodIds } from '../../enums/app/app';
 import {
     LeaveEntitlementResponseSchema,
+    LeaveType,
     LeaveTypeListResponseSchema,
     SupervisorResponseSchema,
 } from '../../fixtures/api/schemas/app/leaveSchema';
 import { formatIsoDate } from '../util/util';
 
-/** Page size used when scanning the configured leave types. */
-const LEAVE_TYPE_LOOKUP_LIMIT = 50;
+/** The `limit` value that makes the application return every leave type. */
+const ALL_LEAVE_TYPES_LIMIT = 0;
+
+/**
+ * Lists every leave type the instance configures.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @returns {Promise<LeaveType[]>} The configured leave types.
+ */
+async function listLeaveTypes(
+    context: APIRequestContext
+): Promise<LeaveType[]> {
+    const response = await context.get(ApiEndpoints.LEAVE_TYPES, {
+        params: { limit: ALL_LEAVE_TYPES_LIMIT },
+    });
+
+    expect(response.status()).toBe(200);
+
+    return LeaveTypeListResponseSchema.parse(await response.json()).data;
+}
+
+/**
+ * Creates a leave type unless the instance already has one with that name, which
+ * the application would reject with a 422.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @param {object} leaveType - The leave type that has to exist.
+ * @param {string} leaveType.name - Its name, unique on an instance.
+ * @param {boolean} leaveType.situational - Whether it needs no entitlement.
+ * @returns {Promise<void>} Resolves once the leave type exists.
+ */
+export async function ensureLeaveType(
+    context: APIRequestContext,
+    leaveType: { name: string; situational: boolean }
+): Promise<void> {
+    const leaveTypes = await listLeaveTypes(context);
+    const exists = leaveTypes.some(
+        (existing): boolean =>
+            !existing.deleted && existing.name === leaveType.name
+    );
+
+    if (exists) {
+        return;
+    }
+
+    const response = await context.post(ApiEndpoints.LEAVE_TYPES, {
+        data: leaveType,
+    });
+
+    expect(response.status()).toBe(200);
+}
 
 /**
  * Picks a leave type an employee can be granted an entitlement for.
@@ -20,14 +70,8 @@ const LEAVE_TYPE_LOOKUP_LIMIT = 50;
 export async function resolveLeaveType(
     context: APIRequestContext
 ): Promise<{ id: number; name: string }> {
-    const response = await context.get(ApiEndpoints.LEAVE_TYPES, {
-        params: { limit: LEAVE_TYPE_LOOKUP_LIMIT },
-    });
-
-    expect(response.status()).toBe(200);
-
-    const leaveTypes = LeaveTypeListResponseSchema.parse(await response.json());
-    const usable = leaveTypes.data.find(
+    const leaveTypes = await listLeaveTypes(context);
+    const usable = leaveTypes.find(
         (leaveType): boolean => !leaveType.deleted && !leaveType.situational
     );
 
