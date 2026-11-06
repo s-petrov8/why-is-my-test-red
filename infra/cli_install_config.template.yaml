@@ -1,4 +1,4 @@
-# Rendered with envsubst into cli_install_config.yaml, which is git-ignored.
+# Rendered with envsubst by start-orangehrm.sh and copied into the app container.
 database:
     hostName: db
     hostPort: 3306

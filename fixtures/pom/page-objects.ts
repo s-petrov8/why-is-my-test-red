@@ -1,8 +1,15 @@
 import { Page } from '@playwright/test';
-import { ApplyLeavePage } from '../../pages/app/applyLeave.page';
-import { EmployeeListPage } from '../../pages/app/employeeList.page';
-import { LeaveListPage } from '../../pages/app/leaveList.page';
+// Login
 import { LoginPage } from '../../pages/app/login.page';
+
+// Employee details and reporting lines
+import { EmployeeListPage } from '../../pages/app/employeeList.page';
+
+// Admin users and roles
+
+// Leave
+import { ApplyLeavePage } from '../../pages/app/applyLeave.page';
+import { LeaveListPage } from '../../pages/app/leaveList.page';
 
 /**
  * Every page object, bound to one browser page.
@@ -24,10 +31,22 @@ import { LoginPage } from '../../pages/app/login.page';
  * Every page is offered to every session on purpose. Which of them a given user
  * may actually reach is the application's business, and asserting on that is a
  * test's job, not this registry's.
+ *
+ * The imports, this type and `createPageObjects` each have one section per
+ * OrangeHRM area. Add a page object at the end of its area's section, so pull
+ * requests for different areas change separate parts of this file and merge
+ * cleanly.
  */
 export type PageObjects = {
+    // Login
     loginPage: LoginPage;
+
+    // Employee details and reporting lines
     employeeListPage: EmployeeListPage;
+
+    // Admin users and roles
+
+    // Leave
     applyLeavePage: ApplyLeavePage;
     leaveListPage: LeaveListPage;
 };
@@ -49,8 +68,15 @@ export type PageObjects = {
  */
 export function createPageObjects(page: Page): PageObjects {
     return {
+        // Login
         loginPage: new LoginPage(page),
+
+        // Employee details and reporting lines
         employeeListPage: new EmployeeListPage(page),
+
+        // Admin users and roles
+
+        // Leave
         applyLeavePage: new ApplyLeavePage(page),
         leaveListPage: new LeaveListPage(page),
     };

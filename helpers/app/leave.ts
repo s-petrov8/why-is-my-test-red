@@ -1,5 +1,6 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import { ApiEndpoints, ReportingMethodIds } from '../../enums/app/app';
+import { InvalidParameterResponseSchema } from '../../fixtures/api/schemas/app/errorSchema';
 import {
     LeaveEntitlementResponseSchema,
     LeaveTypeListResponseSchema,
@@ -9,6 +10,69 @@ import { formatIsoDate } from '../util/util';
 
 /** Page size used when scanning the configured leave types. */
 const LEAVE_TYPE_LOOKUP_LIMIT = 50;
+
+/**
+ * Tries to create a leave type. A 200 is checked by status only, as the project
+ * overrides in `AGENTS.md` require. The application answers 422 on `name` when a
+ * leave type already has that name, which is not proof it's a usable one, so the
+ * caller confirms that with `assertLeaveTypeExists`.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @param {object} leaveType - The leave type to create.
+ * @param {string} leaveType.name - Its name.
+ * @param {boolean} leaveType.situational - Whether it needs no entitlement.
+ * @returns {Promise<boolean>} True if created, false if the name is taken.
+ */
+export async function createLeaveType(
+    context: APIRequestContext,
+    leaveType: { name: string; situational: boolean }
+): Promise<boolean> {
+    const response = await context.post(ApiEndpoints.LEAVE_TYPES, {
+        data: leaveType,
+    });
+
+    if (response.ok()) {
+        expect(response.status()).toBe(200);
+
+        return true;
+    }
+
+    expect(response.status()).toBe(422);
+    expect(
+        InvalidParameterResponseSchema.parse(await response.json()).error.data
+            .invalidParamKeys
+    ).toEqual(['name']);
+
+    return false;
+}
+
+/**
+ * Asserts that an undeleted leave type with this exact configuration exists. The
+ * `name` filter leaves out deleted leave types and ignores case.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @param {object} leaveType - The leave type that has to exist.
+ * @param {string} leaveType.name - Its name.
+ * @param {boolean} leaveType.situational - Whether it needs no entitlement.
+ * @returns {Promise<void>} Resolves once the leave type is confirmed.
+ */
+export async function assertLeaveTypeExists(
+    context: APIRequestContext,
+    leaveType: { name: string; situational: boolean }
+): Promise<void> {
+    const response = await context.get(ApiEndpoints.LEAVE_TYPES, {
+        params: { name: leaveType.name },
+    });
+
+    expect(response.status()).toBe(200);
+
+    const leaveTypes = LeaveTypeListResponseSchema.parse(await response.json());
+
+    expect(
+        leaveTypes.data,
+        `"${leaveType.name}" was rejected as a duplicate but no matching leave type is listed. It may have been deleted or changed on this instance; start a fresh instance.`
+    ).toContainEqual(expect.objectContaining(leaveType));
+}
 
 /**
  * Picks a leave type an employee can be granted an entitlement for.

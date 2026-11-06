@@ -14,6 +14,41 @@ The analyser does not exist yet. So far, this repo holds the system it will exam
 
 In GitHub Actions, run **OrangeHRM suite** by hand and choose the OrangeHRM version, the number of runs and whether to use debug logging.
 
+Locally, this starts an instance on port 8080 and runs the suite against it. It needs Node, Docker, `curl`, `openssl` and `envsubst` (from `gettext`), and the suite can run more than once against one instance. On Linux, add `--with-deps` to the Chromium install.
+
+```bash
+npm ci
+npx playwright install chromium
+
+export DB_ROOT_PASSWORD="$(openssl rand -hex 16)"
+export ADMIN_USERNAME=Admin
+export ADMIN_PASSWORD="Local-$(openssl rand -hex 12)-Aa1"
+
+COMPOSE_PROJECT_NAME=ohrm-a infra/start-orangehrm.sh
+APP_URL=http://localhost:8080 API_URL=http://localhost:8080 npx playwright test
+```
+
+### Run several instances at once
+
+Give each instance its own Compose project and port. Without a project name, every checkout uses the project `infra` and they replace each other's containers, so outside CI the start script refuses to run without one.
+
+Run each suite from its own git worktree, because `.auth/`, `test-results/` and `playwright-report/` belong to the checkout, and a new worktree needs its own `npm ci`. Run all of this in a shell where the three `export` lines above are set: the start script installs the instance with those values, and the suite signs in with the same admin credentials.
+
+```bash
+git worktree add ../ohrm-b
+cd ../ohrm-b
+npm ci
+
+COMPOSE_PROJECT_NAME=ohrm-b OHRM_PORT=8081 infra/start-orangehrm.sh
+APP_URL=http://localhost:8081 API_URL=http://localhost:8081 npx playwright test
+```
+
+Remove an instance and its data by its project name, from the root of a checkout:
+
+```bash
+COMPOSE_PROJECT_NAME=ohrm-b docker compose -f infra/docker-compose.yml down -v
+```
+
 ## Credits
 
 The suite is built on Ivan Davidov's Playwright scaffold, and its agent rules and skills come from [agentic-playwright](https://github.com/idavidov13/agentic-playwright) v2.0.1 (MIT). `NOTICE.md` lists its third-party components. OrangeHRM is [a separate GPL-3.0 project](https://github.com/orangehrm/orangehrm), pulled as a Docker image and not included in this repo.

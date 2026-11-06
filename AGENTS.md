@@ -12,6 +12,7 @@ These win over the Constitution and the skills, because they change the evidence
 - **Target:** the suite runs against a private, throwaway OrangeHRM, started by `infra/`, on one fresh instance per run. Configuration a fresh install lacks goes in `tests/app/seed.setup.ts`.
 - **Existing tests:** they follow the Constitution once they are next edited. New tests follow it from the start.
 - **Known flake:** the `AND semantics` test in `tests/app/api/employeeSearch.spec.ts` stays as it is, as a known real failure for the analyser.
+- **Setup's leave type create:** on the setup step's fresh-instance path, the leave type create checks the status only, so a bug in that response fails one test and doesn't stop the suite; the Leave API tests validate its shape.
 
 ## Constitution
 
