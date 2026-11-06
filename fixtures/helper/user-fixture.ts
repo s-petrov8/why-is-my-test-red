@@ -4,6 +4,7 @@ import {
     test as base,
 } from '@playwright/test';
 import { appConfig } from '../../config/app';
+import { ANONYMOUS_STORAGE_STATE } from '../../config/util/util';
 import { StorageStatePaths } from '../../enums/app/app';
 import { createAuthenticatedContext } from '../../helpers/app/createStorageState';
 import { assignSupervisor } from '../../helpers/app/reportingLine';
@@ -30,6 +31,8 @@ import { createPageObjects, PageObjects } from '../pom/page-objects';
  * - `newApiUser`: the same person with `api`, the API signed in as them.
  * - `newSupervisorOf`: a new person who supervises an existing one.
  * - `apiRequestAs`: the API signed in as an existing person.
+ * - `newSignedOutSession`: a browser session nobody has signed in to, for tests of
+ *   the login page itself.
  *
  * The admin session is the `apiRequest` fixture, or `adminContext` for helpers
  * taking a request context. Never edit `Admin` or terminate
@@ -46,6 +49,7 @@ export type UserFixtures = {
     adminContext: APIRequestContext;
     newTempUser: (options?: TempUserOptions) => Promise<TempUser>;
     signInAs: (user: TempUser) => Promise<PageObjects>;
+    newSignedOutSession: () => Promise<PageObjects>;
     apiRequestAs: (user: TempUser) => Promise<ApiRequestFn>;
     newApiUser: (options?: TempUserOptions) => Promise<ApiUser>;
     newSupervisorOf: (
@@ -106,6 +110,28 @@ export const test = base.extend<UserFixtures>({
                 contexts.push(context);
 
                 return createPageObjects(page);
+            });
+        } finally {
+            for (const context of contexts) {
+                await context.close();
+            }
+        }
+    },
+    /**
+     * Hands the test a function that opens a browser context of its own with nobody
+     * signed in, closing every one afterwards.
+     */
+    newSignedOutSession: async ({ browser }, use) => {
+        const contexts: BrowserContext[] = [];
+
+        try {
+            await use(async (): Promise<PageObjects> => {
+                const context = await browser.newContext({
+                    storageState: ANONYMOUS_STORAGE_STATE,
+                });
+                contexts.push(context);
+
+                return createPageObjects(await context.newPage());
             });
         } finally {
             for (const context of contexts) {

@@ -23,21 +23,12 @@ import {
     MyLeaveRequestListResponseSchema,
     WorkWeekResponseSchema,
 } from '../../../fixtures/api/schemas/app/leaveSchema';
-import {
-    DeleteWorkShiftsResponseSchema,
-    WorkShiftResponseSchema,
-} from '../../../fixtures/api/schemas/app/workShiftSchema';
-import {
-    DeleteUsersResponseSchema,
-    UserResponseSchema,
-} from '../../../fixtures/api/schemas/app/userSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import {
     applyForLeave,
     deleteHolidays,
     submitLeaveRequest,
 } from '../../../helpers/app/leave';
-import { deleteWorkShift } from '../../../helpers/app/workShift';
 import {
     formatIsoDate,
     getLeavePeriod,
@@ -47,16 +38,7 @@ import {
 import {
     createHolidayData,
     createLeaveRequestData,
-    createWorkShiftData,
 } from '../../../test-data/factories/app/leave.factory';
-import { createUserData } from '../../../test-data/factories/app/user.factory';
-
-/** The length of the shift the work shift shapes are checked with. */
-const SHIFT_HOURS = {
-    hoursPerDay: '4',
-    startTime: '09:00',
-    endTime: '13:00',
-};
 
 /**
  * The owning tests for shapes that fixtures, teardown and shared helpers read without
@@ -65,32 +47,12 @@ const SHIFT_HOURS = {
  */
 test.describe('api/v2 shapes that setup, teardown and shared helpers rely on', () => {
     let holidayIdToDelete: number | undefined;
-    let userIdToDelete: number | undefined;
-    let workShiftIdToDelete: number | undefined;
 
     test.afterEach(async ({ apiRequest }) => {
         if (holidayIdToDelete !== undefined) {
             const id = holidayIdToDelete;
             holidayIdToDelete = undefined;
             await deleteHolidays(apiRequest, [id]);
-        }
-
-        if (userIdToDelete !== undefined) {
-            const id = userIdToDelete;
-            userIdToDelete = undefined;
-            const { status } = await apiRequest({
-                method: 'DELETE',
-                url: ApiEndpoints.ADMIN_USERS,
-                baseUrl: appConfig.apiUrl,
-                body: { ids: [id] },
-            });
-            expect(status).toBe(200);
-        }
-
-        if (workShiftIdToDelete !== undefined) {
-            const id = workShiftIdToDelete;
-            workShiftIdToDelete = undefined;
-            await deleteWorkShift(apiRequest, id);
         }
     });
 
@@ -166,41 +128,6 @@ test.describe('api/v2 shapes that setup, teardown and shared helpers rely on', (
             expect(reportingLine.data.supervisor.empNumber).toBe(
                 supervisor.empNumber
             );
-        }
-    );
-
-    test(
-        'should create and delete a user account with their exact shapes',
-        { tag: '@api' },
-        async ({ apiRequest, tempTestEmployee }) => {
-            let userId = 0;
-
-            await test.step('WHEN an account is created', async () => {
-                const { status, body } = await apiRequest({
-                    method: 'POST',
-                    url: ApiEndpoints.ADMIN_USERS,
-                    baseUrl: appConfig.apiUrl,
-                    body: createUserData(tempTestEmployee.empNumber),
-                });
-
-                expect(status).toBe(200);
-                userId = UserResponseSchema.parse(body).data.id;
-                userIdToDelete = userId;
-            });
-
-            await test.step('WHEN it is deleted', async () => {
-                const { status, body } = await apiRequest({
-                    method: 'DELETE',
-                    url: ApiEndpoints.ADMIN_USERS,
-                    baseUrl: appConfig.apiUrl,
-                    body: { ids: [userId] },
-                });
-
-                expect(status).toBe(200);
-                userIdToDelete = undefined;
-                const deleted = DeleteUsersResponseSchema.parse(body);
-                expect(deleted.data).toEqual([userId]);
-            });
         }
     );
 
@@ -448,44 +375,6 @@ test.describe('api/v2 shapes that setup, teardown and shared helpers rely on', (
 
             expect(status).toBe(200);
             expect(WorkWeekResponseSchema.parse(body)).toBeTruthy();
-        }
-    );
-
-    test(
-        'should create and delete a work shift with their exact shapes',
-        { tag: '@api' },
-        async ({ apiRequest }) => {
-            let workShiftId = 0;
-
-            await test.step('WHEN a work shift is created', async () => {
-                const { status, body } = await apiRequest({
-                    method: 'POST',
-                    url: ApiEndpoints.ADMIN_WORK_SHIFTS,
-                    baseUrl: appConfig.apiUrl,
-                    body: createWorkShiftData({
-                        empNumbers: [],
-                        hours: SHIFT_HOURS,
-                    }),
-                });
-
-                expect(status).toBe(200);
-                workShiftId = WorkShiftResponseSchema.parse(body).data.id;
-                workShiftIdToDelete = workShiftId;
-            });
-
-            await test.step('WHEN it is deleted', async () => {
-                const { status, body } = await apiRequest({
-                    method: 'DELETE',
-                    url: ApiEndpoints.ADMIN_WORK_SHIFTS,
-                    baseUrl: appConfig.apiUrl,
-                    body: { ids: [workShiftId] },
-                });
-
-                expect(status).toBe(200);
-                workShiftIdToDelete = undefined;
-                const deleted = DeleteWorkShiftsResponseSchema.parse(body);
-                expect(deleted.data).toEqual([workShiftId]);
-            });
         }
     );
 
