@@ -26,3 +26,10 @@ infra/cli_install_config.yaml
 
 # Application logs collected in CI
 /app-logs/
+
+# Claude Code
+.claude/projects/
+.claude/skills/ai-native-workflow-workspace/
+
+# Python bytecode (hook scripts)
+__pycache__/

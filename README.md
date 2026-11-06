@@ -16,4 +16,4 @@ In GitHub Actions, run **OrangeHRM suite** by hand and choose the OrangeHRM vers
 
 ## Credits
 
-The suite is built on Ivan Davidov's Playwright scaffold (MIT). OrangeHRM is [a separate GPL-3.0 project](https://github.com/orangehrm/orangehrm), pulled as a Docker image and not included in this repo.
+The suite is built on Ivan Davidov's Playwright scaffold, and its agent rules and skills come from [agentic-playwright](https://github.com/idavidov13/agentic-playwright) v2.0.1 (MIT). `NOTICE.md` lists its third-party components. OrangeHRM is [a separate GPL-3.0 project](https://github.com/orangehrm/orangehrm), pulled as a Docker image and not included in this repo.
