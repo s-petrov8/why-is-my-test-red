@@ -1,4 +1,5 @@
 import { appConfig } from '../../../config/app';
+import { ENTITLED_DAYS } from '../../../config/leave';
 import {
     ApiEndpoints,
     LeaveActions,
@@ -19,6 +20,7 @@ import {
     grantLeaveEntitlement,
     readEntitlement,
     readLeaveBalance,
+    readLeaveBalanceForRange,
     readLeaveDays,
     readLeaveRequest,
     submitLeaveRequest,
@@ -39,9 +41,6 @@ import {
     createWorkShiftData,
 } from '../../../test-data/factories/app/leave.factory';
 
-/** The days a test's employee holds, unless the test says otherwise. */
-const ENTITLED_DAYS = 5;
-
 /** A morning of two hours, a quarter of the default 8-hour shift. */
 const TWO_HOUR_DURATION = {
     type: LeaveDurationTypes.SPECIFY_TIME,
@@ -56,21 +55,20 @@ const FOUR_HOUR_SHIFT = {
 };
 
 test.describe('api/v2/leave balance and entitlements', () => {
-    let leaveTypeIdToDelete: number | undefined;
+    let leaveTypeIdsToDelete: number[] = [];
     let workShiftIdToDelete: number | undefined;
 
     test.afterEach(async ({ apiRequest }) => {
-        if (leaveTypeIdToDelete !== undefined) {
-            const id = leaveTypeIdToDelete;
-            leaveTypeIdToDelete = undefined;
-            const { status, body } = await apiRequest({
+        if (leaveTypeIdsToDelete.length > 0) {
+            const ids = leaveTypeIdsToDelete;
+            leaveTypeIdsToDelete = [];
+            const { status } = await apiRequest({
                 method: 'DELETE',
                 url: ApiEndpoints.LEAVE_TYPES,
                 baseUrl: appConfig.apiUrl,
-                body: { ids: [id] },
+                body: { ids },
             });
             expect(status).toBe(200);
-            expect(DeleteLeaveRecordsResponseSchema.parse(body)).toBeTruthy();
         }
 
         if (workShiftIdToDelete !== undefined) {
@@ -81,28 +79,46 @@ test.describe('api/v2/leave balance and entitlements', () => {
     });
 
     test(
-        'should create a leave type and answer with its exact shape',
+        'should create leave types and delete them, answering with their exact shapes',
         { tag: '@api' },
         async ({ apiRequest }) => {
-            const leaveType = {
-                name: createLeaveTypeName(),
-                situational: false,
-            };
+            for (const situational of [false, true]) {
+                await test.step(`WHEN a leave type with situational ${situational} is created`, async () => {
+                    const leaveType = {
+                        name: createLeaveTypeName(),
+                        situational,
+                    };
+                    const { status, body } = await apiRequest({
+                        method: 'POST',
+                        url: ApiEndpoints.LEAVE_TYPES,
+                        baseUrl: appConfig.apiUrl,
+                        body: leaveType,
+                    });
 
-            const { status, body } = await apiRequest({
-                method: 'POST',
-                url: ApiEndpoints.LEAVE_TYPES,
-                baseUrl: appConfig.apiUrl,
-                body: leaveType,
-            });
+                    expect(status).toBe(200);
+                    const created = LeaveTypeResponseSchema.parse(body);
+                    leaveTypeIdsToDelete.push(created.data.id);
+                    expect(created.data).toEqual({
+                        id: expect.any(Number),
+                        ...leaveType,
+                        deleted: false,
+                    });
+                });
+            }
 
-            expect(status).toBe(200);
-            const created = LeaveTypeResponseSchema.parse(body);
-            leaveTypeIdToDelete = created.data.id;
-            expect(created.data).toEqual({
-                id: expect.any(Number),
-                ...leaveType,
-                deleted: false,
+            await test.step('WHEN they are deleted', async () => {
+                const ids = leaveTypeIdsToDelete;
+                const { status, body } = await apiRequest({
+                    method: 'DELETE',
+                    url: ApiEndpoints.LEAVE_TYPES,
+                    baseUrl: appConfig.apiUrl,
+                    body: { ids },
+                });
+
+                expect(status).toBe(200);
+                leaveTypeIdsToDelete = [];
+                const deleted = DeleteLeaveRecordsResponseSchema.parse(body);
+                expect(deleted.data).toEqual(ids);
             });
         }
     );
@@ -110,10 +126,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
     test(
         'should hold applied days as pending and move them to scheduled on approval without changing the balance',
         { tag: '@api' },
-        async ({ leaveType, newLeaveEmployee, newSupervisorOf }) => {
+        async ({ apiRequest, leaveType, newLeaveEmployee }) => {
             const { monday } = getLeaveWeek();
             const employee = await newLeaveEmployee({ days: ENTITLED_DAYS });
-            const supervisor = await newSupervisorOf(employee);
             let requestId = 0;
 
             await test.step('WHEN the employee applies for one day', async () => {
@@ -139,9 +154,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
                 });
             });
 
-            await test.step('WHEN the supervisor approves it', async () => {
+            await test.step('WHEN the admin approves it', async () => {
                 await changeLeaveRequest(
-                    supervisor.api,
+                    apiRequest,
                     requestId,
                     LeaveActions.APPROVE
                 );
@@ -165,15 +180,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
     test(
         'should give the days back when scheduled leave is cancelled',
         { tag: '@api' },
-        async ({
-            apiRequest,
-            leaveType,
-            newLeaveEmployee,
-            newSupervisorOf,
-        }) => {
+        async ({ apiRequest, leaveType, newLeaveEmployee }) => {
             const { monday } = getLeaveWeek();
             const employee = await newLeaveEmployee({ days: ENTITLED_DAYS });
-            const supervisor = await newSupervisorOf(employee);
             const entitlementId = employee.entitlementId ?? 0;
             let requestId = 0;
 
@@ -187,9 +196,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
                 );
             });
 
-            await test.step('AND the supervisor approved it', async () => {
+            await test.step('AND the admin approved it', async () => {
                 await changeLeaveRequest(
-                    supervisor.api,
+                    apiRequest,
                     requestId,
                     LeaveActions.APPROVE
                 );
@@ -204,9 +213,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
                 expect(entitlement.daysUsed).toBe(1);
             });
 
-            await test.step('WHEN the supervisor cancels it', async () => {
+            await test.step('WHEN the admin cancels it', async () => {
                 await changeLeaveRequest(
-                    supervisor.api,
+                    apiRequest,
                     requestId,
                     LeaveActions.CANCEL
                 );
@@ -236,15 +245,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
     test(
         'should give the days back when pending leave is rejected',
         { tag: '@api' },
-        async ({
-            apiRequest,
-            leaveType,
-            newLeaveEmployee,
-            newSupervisorOf,
-        }) => {
+        async ({ apiRequest, leaveType, newLeaveEmployee }) => {
             const { monday } = getLeaveWeek();
             const employee = await newLeaveEmployee({ days: ENTITLED_DAYS });
-            const supervisor = await newSupervisorOf(employee);
             const entitlementId = employee.entitlementId ?? 0;
             let requestId = 0;
 
@@ -258,9 +261,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
                 );
             });
 
-            await test.step('WHEN the supervisor rejects it', async () => {
+            await test.step('WHEN the admin rejects it', async () => {
                 await changeLeaveRequest(
-                    supervisor.api,
+                    apiRequest,
                     requestId,
                     LeaveActions.REJECT
                 );
@@ -293,6 +296,28 @@ test.describe('api/v2/leave balance and entitlements', () => {
         async ({ leaveType, newLeaveEmployee }) => {
             const { monday, friday, nextMonday } = getLeaveWeek();
             const employee = await newLeaveEmployee({ days: ENTITLED_DAYS });
+
+            await test.step('GIVEN a range using exactly the balance is not reported as going below zero', async () => {
+                const { negative } = await readLeaveBalanceForRange(
+                    employee.api,
+                    leaveType.id,
+                    monday,
+                    friday
+                );
+
+                expect(negative).toBe(false);
+            });
+
+            await test.step('AND a range one day longer is', async () => {
+                const { negative } = await readLeaveBalanceForRange(
+                    employee.api,
+                    leaveType.id,
+                    monday,
+                    nextMonday
+                );
+
+                expect(negative).toBe(true);
+            });
 
             await test.step('WHEN the employee applies for all five days', async () => {
                 await applyForLeave(
@@ -487,16 +512,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
     test(
         'should use the earliest entitlement first and reverse it on cancel',
         { tag: '@api' },
-        async ({
-            apiRequest,
-            adminContext,
-            leaveType,
-            newLeaveEmployee,
-            newSupervisorOf,
-        }) => {
+        async ({ apiRequest, adminContext, leaveType, newLeaveEmployee }) => {
             const { monday, wednesday } = getLeaveWeek();
             const employee = await newLeaveEmployee({ days: 2 });
-            const supervisor = await newSupervisorOf(employee);
             const earlierId = employee.entitlementId ?? 0;
             const period = getLeavePeriod(monday);
             let laterId = 0;
@@ -541,9 +559,9 @@ test.describe('api/v2/leave balance and entitlements', () => {
                 expect(daysUsed).toBe(1);
             });
 
-            await test.step('WHEN the supervisor cancels the request', async () => {
+            await test.step('WHEN the admin cancels the request', async () => {
                 await changeLeaveRequest(
-                    supervisor.api,
+                    apiRequest,
                     requestId,
                     LeaveActions.CANCEL
                 );

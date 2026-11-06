@@ -60,6 +60,16 @@ export class LeaveRequestDetailsPage {
         return this.toast.getByText(Messages.SAVED_SUCCESSFULLY);
     }
 
+    get errorMessage(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the toast carries no alert role; only its class identifies it as an error
+        return this.page.locator('.oxd-toast--error');
+    }
+
+    get validationErrors(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- field errors render as plain spans with no role and no link to their input
+        return this.page.locator('.oxd-input-field-error-message');
+    }
+
     // ==================== Actions ====================
 
     /**

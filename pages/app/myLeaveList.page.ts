@@ -1,7 +1,11 @@
 import { Locator, Page } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { Messages, Routes } from '../../enums/app/app';
-import { formatIsoDate, formatLeaveDays } from '../../helpers/util/util';
+import {
+    formatAppDate,
+    formatIsoDate,
+    formatLeaveDays,
+} from '../../helpers/util/util';
 
 /**
  * Page Object for My Leave List (`Leave > My Leave`), where an employee sees their
@@ -14,6 +18,29 @@ export class MyLeaveListPage {
 
     get heading(): Locator {
         return this.page.getByRole('heading', { name: 'My Leave List' });
+    }
+
+    /**
+     * Scopes to the filter group whose label starts with this text, the only handle
+     * the unlabelled filter controls offer.
+     */
+    private inputGroup(label: string): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the wrapper is a plain div; the labels are not associated with their inputs
+        return this.page
+            .locator('.oxd-input-group')
+            .filter({ hasText: new RegExp(`^${label}`) });
+    }
+
+    get fromDateInput(): Locator {
+        return this.inputGroup('From Date').getByRole('textbox');
+    }
+
+    get toDateInput(): Locator {
+        return this.inputGroup('To Date').getByRole('textbox');
+    }
+
+    get searchButton(): Locator {
+        return this.page.getByRole('button', { name: 'Search' });
     }
 
     get resultRows(): Locator {
@@ -47,6 +74,16 @@ export class MyLeaveListPage {
         return this.toast.getByText(Messages.UPDATED_SUCCESSFULLY);
     }
 
+    get errorMessage(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the toast carries no alert role; only its class identifies it as an error
+        return this.page.locator('.oxd-toast--error');
+    }
+
+    get validationErrors(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- field errors render as plain spans with no role and no link to their input
+        return this.page.locator('.oxd-input-field-error-message');
+    }
+
     // ==================== Actions ====================
 
     /**
@@ -58,6 +95,27 @@ export class MyLeaveListPage {
         await this.page.goto(`${appConfig.appUrl}${Routes.LEAVE_MY_LIST}`, {
             waitUntil: 'domcontentloaded',
         });
+    }
+
+    /**
+     * Filters the list to a date range, then searches. The list starts on today's
+     * leave period, so leave booked into the next one needs this to show.
+     *
+     * @param {object} period - The range.
+     * @param {Date} period.fromDate - Its first day.
+     * @param {Date} period.toDate - Its last day.
+     * @returns {Promise<void>} Resolves once the search is submitted.
+     */
+    async filterToPeriod(period: {
+        fromDate: Date;
+        toDate: Date;
+    }): Promise<void> {
+        await this.fromDateInput.fill(formatAppDate(period.fromDate));
+
+        await this.toDateInput.clear();
+        await this.toDateInput.fill(formatAppDate(period.toDate));
+
+        await this.searchButton.click();
     }
 
     /**

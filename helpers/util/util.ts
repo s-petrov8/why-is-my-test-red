@@ -248,6 +248,17 @@ export function getPastWeekday(daysBack: number): Date {
 }
 
 /**
+ * Says whether a date is in the same leave period as today. A fresh instance has no
+ * leave period before the year it was set up in.
+ *
+ * @param {Date} date - The date.
+ * @returns {boolean} Whether it falls in today's leave period.
+ */
+export function isInCurrentLeavePeriod(date: Date): boolean {
+    return date.getFullYear() === new Date().getFullYear();
+}
+
+/**
  * Formats a number of days the way the leave screens render it.
  *
  * @param {number} days - The number of days.

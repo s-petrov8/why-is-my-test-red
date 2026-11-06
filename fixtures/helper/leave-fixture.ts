@@ -1,10 +1,7 @@
 import { expect } from '@playwright/test';
 import { ApiEndpoints } from '../../enums/app/app';
-import { createAuthenticatedContext } from '../../helpers/app/createStorageState';
-import {
-    grantLeaveEntitlement,
-    resolveLeaveType,
-} from '../../helpers/app/leave';
+import { ENTITLED_DAYS } from '../../config/leave';
+import { grantLeaveForDate, resolveLeaveType } from '../../helpers/app/leave';
 import { assignSupervisor } from '../../helpers/app/reportingLine';
 import { TempUser, TempUserOptions } from '../../helpers/app/tempUser';
 import {
@@ -13,16 +10,13 @@ import {
     getLeaveWeek,
 } from '../../helpers/util/util';
 import { createLeaveTypeName } from '../../test-data/factories/app/leave.factory';
-import {
-    DeleteLeaveRecordsResponseSchema,
-    LeaveTypeResponseSchema,
-} from '../api/schemas/app/leaveSchema';
 import { ApiUser, test as userTest } from './user-fixture';
 
-/** Leave helper fixtures: the preconditions the leave workflow needs before it */
-
-/** Days of leave granted to a temporary user -- enough for any single request. */
-const ENTITLEMENT_DAYS = 5;
+/**
+ * Leave helper fixtures: the preconditions the leave workflow needs. These are
+ * shared setup, so they check statuses and read only what they need, as the project
+ * overrides in `AGENTS.md` require.
+ */
 
 /** An id for a leave type and the name the Leave screens show for it. */
 export type LeaveTypeRef = { id: number; name: string };
@@ -82,42 +76,34 @@ export const test = userTest.extend<LeaveFixtures>({
      * @param {function} fixtures.newTempUser - Factory creating the two people.
      * @param {function} use - Playwright fixture lifecycle callback.
      */
-    tempLeaveApprovalUsers: async ({ newTempUser }, use) => {
-        const context = await createAuthenticatedContext();
+    tempLeaveApprovalUsers: async ({ adminContext, newTempUser }, use) => {
+        const applicant = await newTempUser();
+        const supervisor = await newTempUser();
 
-        try {
-            const applicant = await newTempUser();
-            const supervisor = await newTempUser();
+        const leaveType = await resolveLeaveType(adminContext);
+        const leaveDate = getFutureWeekday(LEAVE_DAYS_AHEAD);
 
-            const leaveType = await resolveLeaveType(context);
-            const leaveDate = getFutureWeekday(LEAVE_DAYS_AHEAD);
-            const leavePeriod = getLeavePeriod(leaveDate);
+        await grantLeaveForDate(adminContext, {
+            empNumber: applicant.empNumber,
+            leaveTypeId: leaveType.id,
+            leaveDate,
+            days: ENTITLED_DAYS,
+        });
 
-            await grantLeaveEntitlement(context, {
-                empNumber: applicant.empNumber,
-                leaveTypeId: leaveType.id,
-                fromDate: leavePeriod.fromDate,
-                toDate: leavePeriod.toDate,
-                days: ENTITLEMENT_DAYS,
-            });
+        await assignSupervisor(adminContext, {
+            empNumber: applicant.empNumber,
+            supervisorEmpNumber: supervisor.empNumber,
+        });
 
-            await assignSupervisor(context, {
-                empNumber: applicant.empNumber,
-                supervisorEmpNumber: supervisor.empNumber,
-            });
-
-            await use({
-                applicant,
-                supervisor,
-                leaveTypeId: leaveType.id,
-                leaveTypeName: leaveType.name,
-                leaveDate,
-                leavePeriod,
-                entitledDays: ENTITLEMENT_DAYS,
-            });
-        } finally {
-            await context.dispose();
-        }
+        await use({
+            applicant,
+            supervisor,
+            leaveTypeId: leaveType.id,
+            leaveTypeName: leaveType.name,
+            leaveDate,
+            leavePeriod: getLeavePeriod(leaveDate),
+            entitledDays: ENTITLED_DAYS,
+        });
     },
     leaveType: async ({ adminContext }, use) => {
         await use(await resolveLeaveType(adminContext));
@@ -132,9 +118,8 @@ export const test = userTest.extend<LeaveFixtures>({
 
             expect(response.status()).toBe(200);
 
-            const leaveType = LeaveTypeResponseSchema.parse(
-                await response.json()
-            ).data;
+            const { data: leaveType }: { data: LeaveTypeRef } =
+                await response.json();
 
             created.push(leaveType.id);
 
@@ -150,15 +135,12 @@ export const test = userTest.extend<LeaveFixtures>({
             );
 
             expect(response.status()).toBe(200);
-            expect(
-                DeleteLeaveRecordsResponseSchema.parse(await response.json())
-            ).toBeTruthy();
         }
     },
     newLeaveEmployee: async ({ adminContext, newApiUser, leaveType }, use) => {
         await use(async (options) => {
             const {
-                days = ENTITLEMENT_DAYS,
+                days = ENTITLED_DAYS,
                 entitledOn = getLeaveWeek().monday,
                 ...userOptions
             } = options ?? {};
@@ -168,10 +150,10 @@ export const test = userTest.extend<LeaveFixtures>({
                 return employee;
             }
 
-            const entitlement = await grantLeaveEntitlement(adminContext, {
+            const entitlement = await grantLeaveForDate(adminContext, {
                 empNumber: employee.empNumber,
                 leaveTypeId: leaveType.id,
-                ...getLeavePeriod(entitledOn),
+                leaveDate: entitledOn,
                 days,
             });
 

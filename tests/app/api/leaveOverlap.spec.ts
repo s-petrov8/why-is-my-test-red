@@ -248,10 +248,9 @@ test.describe('api/v2/leave overlapping requests', () => {
         test(
             `should free the date for a new request after ${action}`,
             { tag: '@api' },
-            async ({ leaveType, newLeaveEmployee, newSupervisorOf }) => {
+            async ({ apiRequest, leaveType, newLeaveEmployee }) => {
                 const { monday } = getLeaveWeek();
                 const employee = await newLeaveEmployee();
-                const supervisor = await newSupervisorOf(employee);
                 const leave = createLeaveRequestData({
                     leaveTypeId: leaveType.id,
                     fromDate: monday,
@@ -262,8 +261,8 @@ test.describe('api/v2/leave overlapping requests', () => {
                     requestId = await applyForLeave(employee.api, leave);
                 });
 
-                await test.step('WHEN the supervisor takes the action', async () => {
-                    await changeLeaveRequest(supervisor.api, requestId, action);
+                await test.step('WHEN the admin takes the action', async () => {
+                    await changeLeaveRequest(apiRequest, requestId, action);
                 });
 
                 await test.step('THEN the date can be requested again', async () => {

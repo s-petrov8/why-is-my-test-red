@@ -11,7 +11,7 @@ import {
 import { createLeaveRequestData } from '../../../test-data/factories/app/leave.factory';
 
 /** Two days held, so a two-day request fits exactly and a three-day one does not. */
-const ENTITLED_DAYS = 2;
+const EXACT_FIT_DAYS = 2;
 
 test.describe('functional apply leave', () => {
     test(
@@ -19,7 +19,7 @@ test.describe('functional apply leave', () => {
         { tag: '@regression' },
         async ({ leaveType, newLeaveEmployee, newLeaveType, signInAs }) => {
             const { monday, tuesday, wednesday } = getLeaveWeek();
-            const employee = await newLeaveEmployee({ days: ENTITLED_DAYS });
+            const employee = await newLeaveEmployee({ days: EXACT_FIT_DAYS });
             const ineligibleType = await newLeaveType();
             const { applyLeavePage } = await signInAs(employee);
 
@@ -44,12 +44,18 @@ test.describe('functional apply leave', () => {
 
             await test.step('WHEN they pick it and two days they can cover', async () => {
                 await applyLeavePage.leaveTypeOption(leaveType.name).click();
-                await applyLeavePage.setLeaveDates(monday, tuesday);
+
+                expect(
+                    await applyLeavePage.setLeaveDatesAndWaitForBalance(
+                        monday,
+                        tuesday
+                    )
+                ).toBe(false);
             });
 
-            await test.step('THEN the form shows their balance', async () => {
+            await test.step('THEN the form shows their balance, without a warning', async () => {
                 await expect(applyLeavePage.leaveBalance).toContainText(
-                    formatLeaveDays(ENTITLED_DAYS)
+                    formatLeaveDays(EXACT_FIT_DAYS)
                 );
                 await expect(applyLeavePage.balanceNotSufficient).toHaveCount(
                     0
@@ -57,7 +63,12 @@ test.describe('functional apply leave', () => {
             });
 
             await test.step('WHEN they extend it to three days', async () => {
-                await applyLeavePage.setLeaveDates(monday, wednesday);
+                expect(
+                    await applyLeavePage.setLeaveDatesAndWaitForBalance(
+                        monday,
+                        wednesday
+                    )
+                ).toBe(true);
             });
 
             await test.step('THEN the form warns the balance is not sufficient', async () => {

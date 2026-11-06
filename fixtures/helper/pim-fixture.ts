@@ -2,12 +2,7 @@ import { expect, test as base } from '@playwright/test';
 import { ApiEndpoints } from '../../enums/app/app';
 import { createAuthenticatedContext } from '../../helpers/app/createStorageState';
 import { createEmployeeData } from '../../test-data/factories/app/employee.factory';
-import {
-    DeleteEmployeesResponseSchema,
-    Employee,
-    EmployeeResponseSchema,
-} from '../api/schemas/app/employeeSchema';
-import { RecordsNotFoundResponseSchema } from '../api/schemas/app/errorSchema';
+import { Employee } from '../api/schemas/app/employeeSchema';
 
 /**
  * PIM helper fixtures: personnel records with no login attached.
@@ -46,9 +41,7 @@ export const test = base.extend<PimFixtures>({
 
             expect(createResponse.status()).toBe(200);
 
-            const created = EmployeeResponseSchema.parse(
-                await createResponse.json()
-            );
+            const created: { data: Employee } = await createResponse.json();
 
             empNumber = created.data.empNumber;
 
@@ -63,18 +56,6 @@ export const test = base.extend<PimFixtures>({
                         { data: { ids: [empNumber] } }
                     );
                     expect([200, 404]).toContain(deleteResponse.status());
-
-                    const deleteBody = await deleteResponse.json();
-
-                    if (deleteResponse.status() === 200) {
-                        expect(
-                            DeleteEmployeesResponseSchema.parse(deleteBody)
-                        ).toBeTruthy();
-                    } else {
-                        expect(
-                            RecordsNotFoundResponseSchema.parse(deleteBody)
-                        ).toBeTruthy();
-                    }
                 }
             } finally {
                 // Nested so a failed delete assertion cannot leak the context.

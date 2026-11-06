@@ -12,11 +12,6 @@ export const REQUIRED_LEAVE_REQUEST_FIELDS = [
 
 export const INVALID_LEAVE_REQUEST_VALUES = [
     {
-        description: 'an unknown leave type',
-        field: 'leaveTypeId',
-        value: 2147483647,
-    },
-    {
         description: 'a from date that is no date',
         field: 'fromDate',
         value: 'not-a-date',

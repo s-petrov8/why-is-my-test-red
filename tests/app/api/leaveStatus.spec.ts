@@ -1,4 +1,5 @@
 import { appConfig } from '../../../config/app';
+import { ENTITLED_DAYS } from '../../../config/leave';
 import {
     ApiEndpoints,
     LeaveActions,
@@ -26,16 +27,18 @@ import {
     refusalOf,
 } from '../../../helpers/app/leave';
 import { assignSupervisor } from '../../../helpers/app/reportingLine';
-import { getLeaveWeek, getPastWeekday } from '../../../helpers/util/util';
+import {
+    getLeaveWeek,
+    getPastWeekday,
+    isInCurrentLeavePeriod,
+} from '../../../helpers/util/util';
 import {
     createLeaveComment,
     createLeaveRequestData,
 } from '../../../test-data/factories/app/leave.factory';
 
-const ENTITLED_DAYS = 5;
-
-/** Leave a week in the past, well clear of today, which would make it Taken at once. */
-const PAST_LEAVE_DAYS_BACK = 7;
+/** Leave this far back is clear of today in any time zone the runner and the instance differ by. */
+const PAST_LEAVE_DAYS_BACK = 2;
 
 test.describe('api/v2/leave status changes and access', () => {
     test(
@@ -304,9 +307,11 @@ test.describe('api/v2/leave status changes and access', () => {
             });
             const subordinate = await newLeaveEmployee({ days: 0 });
 
-            await assignSupervisor(adminContext, {
-                empNumber: subordinate.empNumber,
-                supervisorEmpNumber: supervisor.empNumber,
+            await test.step('GIVEN the supervisor has a subordinate', async () => {
+                await assignSupervisor(adminContext, {
+                    empNumber: subordinate.empNumber,
+                    supervisorEmpNumber: supervisor.empNumber,
+                });
             });
 
             for (const { role, applicant } of [
@@ -465,6 +470,13 @@ test.describe('api/v2/leave status changes and access', () => {
             newSupervisorOf,
         }) => {
             const pastDate = getPastWeekday(PAST_LEAVE_DAYS_BACK);
+
+            // eslint-disable-next-line playwright/no-skipped-test -- the first days of January have no past weekday this test can use
+            test.skip(
+                !isInCurrentLeavePeriod(pastDate),
+                'No past weekday in the leave period yet: a fresh instance has no earlier period, so a balance before it has nothing to read.'
+            );
+
             const employee = await newLeaveEmployee({
                 days: ENTITLED_DAYS,
                 entitledOn: pastDate,

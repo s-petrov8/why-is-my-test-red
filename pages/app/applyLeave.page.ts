@@ -1,7 +1,7 @@
 import { Locator, Page } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { ApiEndpoints, Messages, Routes } from '../../enums/app/app';
-import { formatAppDate } from '../../helpers/util/util';
+import { formatAppDate, formatIsoDate } from '../../helpers/util/util';
 
 /**
  * Page Object for the Apply Leave form (`Leave > Apply`), the page an employee
@@ -132,6 +132,33 @@ export class ApplyLeavePage {
         await this.toDateInput.clear();
         await this.toDateInput.fill(formatAppDate(toDate));
         await this.toDateInput.blur();
+    }
+
+    /**
+     * Fills the leave date range and waits for the form's recalculation, so a check
+     * of the balance can't pass on what the form showed before it.
+     *
+     * @param {Date} fromDate - First day of leave.
+     * @param {Date} toDate - Last day of leave.
+     * @returns {Promise<boolean>} Whether the application says the range goes below zero.
+     */
+    async setLeaveDatesAndWaitForBalance(
+        fromDate: Date,
+        toDate: Date
+    ): Promise<boolean> {
+        const [response] = await Promise.all([
+            this.page.waitForResponse(
+                (candidate) =>
+                    candidate
+                        .url()
+                        .includes(ApiEndpoints.LEAVE_BALANCE_BY_TYPE) &&
+                    candidate.url().includes(`toDate=${formatIsoDate(toDate)}`)
+            ),
+            this.setLeaveDates(fromDate, toDate),
+        ]);
+        const { data }: { data: { negative: boolean } } = await response.json();
+
+        return data.negative;
     }
 
     /**

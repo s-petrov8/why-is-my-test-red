@@ -1,6 +1,5 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import { ApiEndpoints, ReportingMethodIds } from '../../enums/app/app';
-import { SupervisorResponseSchema } from '../../fixtures/api/schemas/app/leaveSchema';
 
 /**
  * Puts one employee in another's reporting line, making the second their
@@ -35,5 +34,4 @@ export async function assignSupervisor(
     );
 
     expect(response.status()).toBe(200);
-    expect(SupervisorResponseSchema.parse(await response.json())).toBeTruthy();
 }

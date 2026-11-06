@@ -162,7 +162,11 @@ const LeavePeriodBalanceSchema = z.strictObject({
     balance: LeaveBalanceSchema,
 });
 
-/** `GET /api/v2/leave/leave-balance/leave-type/{id}` with `fromDate` and `toDate`. */
+/**
+ * `GET /api/v2/leave/leave-balance/leave-type/{id}` with `fromDate` and `toDate`.
+ * `negative` says the range would take the balance below zero. `status` is null on
+ * a working day and names the status on a weekend or holiday.
+ */
 export const LeaveBalanceBreakdownResponseSchema = z.strictObject({
     data: z.strictObject({
         negative: z.boolean(),
@@ -174,7 +178,12 @@ export const LeaveBalanceBreakdownResponseSchema = z.strictObject({
                         balance: z.number(),
                         date: z.string(),
                         length: z.number(),
-                        status: z.null(),
+                        status: z
+                            .strictObject({
+                                key: z.int(),
+                                name: z.string(),
+                            })
+                            .nullable(),
                     })
                 ),
             })
@@ -349,28 +358,6 @@ export const DeleteLeaveRecordsResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
-/**
- * The supervisor assignment returned by
- * `POST /api/v2/pim/employees/{empNumber}/supervisors`.
- */
-export const SupervisorResponseSchema = z.strictObject({
-    data: z.strictObject({
-        supervisor: z.strictObject({
-            empNumber: z.int(),
-            firstName: z.string(),
-            lastName: z.string(),
-            middleName: z.string(),
-            terminationId: z.int().nullable(),
-        }),
-        reportingMethod: z.strictObject({
-            id: z.int(),
-            name: z.string(),
-        }),
-    }),
-    meta: z.array(z.unknown()),
-    rels: z.array(z.unknown()),
-});
-
 // Type exports
 export type LeaveType = zOutput<typeof LeaveTypeSchema>;
 export type LeaveTypeListResponse = zOutput<typeof LeaveTypeListResponseSchema>;
@@ -384,9 +371,11 @@ export type LeaveEntitlementResponse = zOutput<
 export type ApplyLeaveRequest = zOutput<typeof ApplyLeaveRequestSchema>;
 export type ApplyLeaveResponse = zOutput<typeof ApplyLeaveResponseSchema>;
 export type LeaveBalance = zOutput<typeof LeaveBalanceSchema>;
+export type LeaveBalanceBreakdown = zOutput<
+    typeof LeaveBalanceBreakdownResponseSchema
+>['data'];
 export type DetailedLeaveRequest = zOutput<typeof DetailedLeaveRequestSchema>;
 export type LeaveDayList = zOutput<typeof LeaveDayListResponseSchema>['data'];
 export type Holiday = zOutput<typeof HolidaySchema>;
 export type CreateHolidayRequest = zOutput<typeof CreateHolidayRequestSchema>;
 export type WorkWeek = zOutput<typeof WorkWeekSchema>;
-export type SupervisorResponse = zOutput<typeof SupervisorResponseSchema>;

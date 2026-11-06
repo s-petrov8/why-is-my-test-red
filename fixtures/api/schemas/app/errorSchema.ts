@@ -25,7 +25,8 @@ export const SessionExpiredResponseSchema = z.strictObject({
 
 /**
  * 400 -- returned when a business rule refuses the call. `message` names the rule,
- * and `status` is the STRING `'400'`.
+ * and `status` is the STRING `'400'`. Captured from the running application, because
+ * the annotations document no 400 on the leave endpoints that answer one.
  */
 export const BadRequestResponseSchema = z.strictObject({
     error: z.strictObject({
@@ -36,7 +37,8 @@ export const BadRequestResponseSchema = z.strictObject({
 
 /**
  * 403 -- returned when the caller has no access to the record. `status` is the
- * NUMBER `403`.
+ * NUMBER `403`. Captured from the running application, because the annotations
+ * document no 403 on the leave endpoints that answer one.
  */
 export const ForbiddenResponseSchema = z.strictObject({
     error: z.strictObject({

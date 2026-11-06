@@ -4,7 +4,6 @@ import { ApiEndpoints } from '../../enums/app/app';
 import type { ApiRequestFn } from '../../fixtures/api/api-types';
 import {
     CreateWorkShiftRequest,
-    DeleteWorkShiftsResponseSchema,
     WorkShiftResponseSchema,
 } from '../../fixtures/api/schemas/app/workShiftSchema';
 
@@ -26,13 +25,13 @@ export async function createWorkShift(
         body: workShift,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return WorkShiftResponseSchema.parse(body).data.id;
 }
 
 /**
- * Deletes a work shift.
+ * Deletes a work shift, as cleanup: it checks only the status.
  *
  * @param {ApiRequestFn} api - The API, signed in as an administrator.
  * @param {number} id - The shift.
@@ -49,6 +48,5 @@ export async function deleteWorkShift(
         body: { ids: [id] },
     });
 
-    expect(status).toBe(200);
-    expect(DeleteWorkShiftsResponseSchema.parse(body).data).toEqual([id]);
+    expect(status, JSON.stringify(body)).toBe(200);
 }

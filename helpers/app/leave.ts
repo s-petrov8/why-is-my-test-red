@@ -2,39 +2,35 @@ import { APIRequestContext, expect } from '@playwright/test';
 import { appConfig } from '../../config/app';
 import { ApiEndpoints, LeaveActions } from '../../enums/app/app';
 import type { ApiRequestFn } from '../../fixtures/api/api-types';
-import {
-    BadRequestResponseSchema,
-    InvalidParameterResponseSchema,
-} from '../../fixtures/api/schemas/app/errorSchema';
+import { BadRequestResponseSchema } from '../../fixtures/api/schemas/app/errorSchema';
 import {
     ApplyLeaveRequest,
     ApplyLeaveResponseSchema,
     CreateHolidayRequest,
-    DeleteLeaveRecordsResponseSchema,
     DetailedLeaveRequest,
     DetailedLeaveRequestResponseSchema,
     Holiday,
     HolidayResponseSchema,
     LeaveBalance,
+    LeaveBalanceBreakdown,
     LeaveBalanceBreakdownResponseSchema,
     LeaveDayList,
     LeaveDayListResponseSchema,
     LeaveEntitlement,
     LeaveEntitlementReadResponseSchema,
-    LeaveEntitlementResponseSchema,
     LeaveRequestResponseSchema,
-    LeaveTypeListResponseSchema,
+    LeaveType,
     WorkWeek,
     WorkWeekResponseSchema,
 } from '../../fixtures/api/schemas/app/leaveSchema';
-import { formatIsoDate } from '../util/util';
+import { formatIsoDate, getLeavePeriod } from '../util/util';
 
 /** Page size used when scanning the configured leave types. */
 const LEAVE_TYPE_LOOKUP_LIMIT = 50;
 
 /**
- * Tries to create a leave type. A 200 is checked by status only, as the project
- * overrides in `AGENTS.md` require. The application answers 422 on `name` when a
+ * Tries to create a leave type, checking the status as the project overrides in
+ * `AGENTS.md` require. The application answers 422 on `name` when a
  * leave type already has that name, which is not proof it's a usable one, so the
  * caller confirms that with `assertLeaveTypeExists`.
  *
@@ -59,10 +55,11 @@ export async function createLeaveType(
     }
 
     expect(response.status()).toBe(422);
-    expect(
-        InvalidParameterResponseSchema.parse(await response.json()).error.data
-            .invalidParamKeys
-    ).toEqual(['name']);
+
+    const invalid: { error: { data: { invalidParamKeys: string[] } } } =
+        await response.json();
+
+    expect(invalid.error.data.invalidParamKeys).toEqual(['name']);
 
     return false;
 }
@@ -87,10 +84,10 @@ export async function assertLeaveTypeExists(
 
     expect(response.status()).toBe(200);
 
-    const leaveTypes = LeaveTypeListResponseSchema.parse(await response.json());
+    const { data: leaveTypes }: { data: LeaveType[] } = await response.json();
 
     expect(
-        leaveTypes.data,
+        leaveTypes,
         `"${leaveType.name}" was rejected as a duplicate but no matching leave type is listed. It may have been deleted or changed on this instance; start a fresh instance.`
     ).toContainEqual(expect.objectContaining(leaveType));
 }
@@ -111,8 +108,8 @@ export async function resolveLeaveType(
 
     expect(response.status()).toBe(200);
 
-    const leaveTypes = LeaveTypeListResponseSchema.parse(await response.json());
-    const usable = leaveTypes.data.find(
+    const { data: leaveTypes }: { data: LeaveType[] } = await response.json();
+    const usable = leaveTypes.find(
         (leaveType): boolean => !leaveType.deleted && !leaveType.situational
     );
 
@@ -126,7 +123,8 @@ export async function resolveLeaveType(
 }
 
 /**
- * Grants an employee days of one leave type for one leave period.
+ * Grants an employee days of one leave type for one leave period. Checks only the
+ * status, and hands back the fields as they came: `leaveShapes.spec.ts` owns the shape.
  *
  * @param {APIRequestContext} context - An authenticated request context.
  * @param {object} entitlement - What to grant.
@@ -159,7 +157,48 @@ export async function grantLeaveEntitlement(
 
     expect(response.status()).toBe(200);
 
-    return LeaveEntitlementResponseSchema.parse(await response.json()).data;
+    const { data }: { data: LeaveEntitlement } = await response.json();
+
+    return data;
+}
+
+/**
+ * Grants the days for the leave period of a leave date, and for today's period when
+ * that is a different one. The Apply form offers a leave type only to someone who
+ * holds it in today's period, so without this, leave booked into next year can't be
+ * applied for on the form.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @param {object} entitlement - What to grant.
+ * @param {number} entitlement.empNumber - Employee receiving the days.
+ * @param {number} entitlement.leaveTypeId - Leave type the days belong to.
+ * @param {Date} entitlement.leaveDate - A date in the leave period to grant for.
+ * @param {number} entitlement.days - Number of days to grant in each period.
+ * @returns {Promise<LeaveEntitlement>} The entitlement covering `leaveDate`.
+ */
+export async function grantLeaveForDate(
+    context: APIRequestContext,
+    entitlement: {
+        empNumber: number;
+        leaveTypeId: number;
+        leaveDate: Date;
+        days: number;
+    }
+): Promise<LeaveEntitlement> {
+    const { leaveDate, ...grant } = entitlement;
+    const today = new Date();
+
+    if (today.getFullYear() !== leaveDate.getFullYear()) {
+        await grantLeaveEntitlement(context, {
+            ...grant,
+            ...getLeavePeriod(today),
+        });
+    }
+
+    return grantLeaveEntitlement(context, {
+        ...grant,
+        ...getLeavePeriod(leaveDate),
+    });
 }
 
 /**
@@ -195,7 +234,7 @@ export async function applyForLeave(
 ): Promise<number> {
     const { status, body } = await submitLeaveRequest(api, leaveRequest);
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return ApplyLeaveResponseSchema.parse(body).data.id;
 }
@@ -216,6 +255,33 @@ export function refusalOf(response: { status: number; body: unknown }): string {
 }
 
 /**
+ * Reads what the application says about leave over a date range: whether it would
+ * take the balance below zero, and each leave period's balance.
+ *
+ * @param {ApiRequestFn} api - The API, signed in as the employee.
+ * @param {number} leaveTypeId - The leave type.
+ * @param {Date} fromDate - The range's first day.
+ * @param {Date} toDate - The range's last day.
+ * @returns {Promise<LeaveBalanceBreakdown>} The answer.
+ */
+export async function readLeaveBalanceForRange(
+    api: ApiRequestFn,
+    leaveTypeId: number,
+    fromDate: Date,
+    toDate: Date
+): Promise<LeaveBalanceBreakdown> {
+    const { status, body } = await api({
+        method: 'GET',
+        url: `${ApiEndpoints.LEAVE_BALANCE_BY_TYPE}/${leaveTypeId}?fromDate=${formatIsoDate(fromDate)}&toDate=${formatIsoDate(toDate)}`,
+        baseUrl: appConfig.apiUrl,
+    });
+
+    expect(status, JSON.stringify(body)).toBe(200);
+
+    return LeaveBalanceBreakdownResponseSchema.parse(body).data;
+}
+
+/**
  * Reads one leave period's balance.
  *
  * The dated form is used because the plain one reports only today's leave
@@ -231,16 +297,12 @@ export async function readLeaveBalance(
     leaveTypeId: number,
     date: Date
 ): Promise<LeaveBalance> {
-    const isoDate = formatIsoDate(date);
-    const { status, body } = await api({
-        method: 'GET',
-        url: `${ApiEndpoints.LEAVE_BALANCE_BY_TYPE}/${leaveTypeId}?fromDate=${isoDate}&toDate=${isoDate}`,
-        baseUrl: appConfig.apiUrl,
-    });
-
-    expect(status).toBe(200);
-
-    const { breakdown } = LeaveBalanceBreakdownResponseSchema.parse(body).data;
+    const { breakdown } = await readLeaveBalanceForRange(
+        api,
+        leaveTypeId,
+        date,
+        date
+    );
 
     expect(breakdown).toHaveLength(1);
 
@@ -264,7 +326,7 @@ export async function readEntitlement(
         baseUrl: appConfig.apiUrl,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return LeaveEntitlementReadResponseSchema.parse(body).data;
 }
@@ -288,7 +350,7 @@ export async function readLeaveRequest(
         baseUrl: appConfig.apiUrl,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return DetailedLeaveRequestResponseSchema.parse(body).data;
 }
@@ -353,7 +415,7 @@ export async function changeLeaveRequest(
         endpoint
     );
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
     expect(LeaveRequestResponseSchema.parse(body).data.id).toBe(leaveRequestId);
 }
 
@@ -374,7 +436,7 @@ export async function readLeaveDays(
         baseUrl: appConfig.apiUrl,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return LeaveDayListResponseSchema.parse(body).data;
 }
@@ -398,7 +460,7 @@ export async function createHoliday(
         body: holiday,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return HolidayResponseSchema.parse(body).data;
 }
@@ -421,8 +483,7 @@ export async function deleteHolidays(
         body: { ids },
     });
 
-    expect(status).toBe(200);
-    expect(DeleteLeaveRecordsResponseSchema.parse(body).data).toEqual(ids);
+    expect(status, JSON.stringify(body)).toBe(200);
 }
 
 /**
@@ -438,23 +499,23 @@ export async function readWorkWeek(api: ApiRequestFn): Promise<WorkWeek> {
         baseUrl: appConfig.apiUrl,
     });
 
-    expect(status).toBe(200);
+    expect(status, JSON.stringify(body)).toBe(200);
 
     return WorkWeekResponseSchema.parse(body).data;
 }
 
 /**
- * Replaces the work week. It is global, so a test that calls this is
- * `@destructive` and restores what {@link readWorkWeek} gave it.
+ * Replaces the work week and confirms it was accepted. It is global, so a test that
+ * calls this is `@destructive` and restores what {@link readWorkWeek} gave it.
  *
  * @param {ApiRequestFn} api - The API, signed in as an administrator.
  * @param {WorkWeek} workWeek - The length of each weekday.
- * @returns {Promise<void>} Resolves once the work week is saved.
+ * @returns The response body, for a test to validate. Restoring ignores it.
  */
 export async function updateWorkWeek(
     api: ApiRequestFn,
     workWeek: WorkWeek
-): Promise<void> {
+): Promise<unknown> {
     const { status, body } = await api({
         method: 'PUT',
         url: ApiEndpoints.LEAVE_WORK_WEEK,
@@ -462,6 +523,7 @@ export async function updateWorkWeek(
         body: workWeek,
     });
 
-    expect(status).toBe(200);
-    expect(WorkWeekResponseSchema.parse(body).data).toEqual(workWeek);
+    expect(status, JSON.stringify(body)).toBe(200);
+
+    return body;
 }

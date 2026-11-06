@@ -48,7 +48,11 @@ export enum LeaveStatuses {
     HOLIDAY = 'Holiday',
 }
 
-/** The `message` of a 400 from the leave endpoints, naming the rule that refused the call */
+/**
+ * The `message` of a 400 from the leave endpoints, naming the rule that refused the
+ * call. Captured from the running application: the annotations document no 400 on
+ * apply or assign.
+ */
 export enum LeaveRefusals {
     BALANCE_EXCEEDED = 'Leave Balance Exceeded',
     NO_WORKING_DAYS = 'Failed to Submit: No Working Days Selected',
@@ -95,6 +99,7 @@ export enum ReservedHolidayWeeks {
     FULL_HOLIDAY = 0,
     HALF_HOLIDAY = 1,
     RECURRING_HOLIDAY = 2,
+    DELETED_HOLIDAY = 3,
 }
 
 /** Ids of the built-in user roles */

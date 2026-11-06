@@ -1,5 +1,10 @@
 import { appConfig } from '../../../config/app';
-import { ApiEndpoints, LeaveActions } from '../../../enums/app/app';
+import { UNKNOWN_RECORD_ID } from '../../../config/leave';
+import {
+    ApiEndpoints,
+    LeaveActions,
+    WorkWeekDayLengths,
+} from '../../../enums/app/app';
 import type { ApiRequestParams } from '../../../fixtures/api/api-types';
 import {
     InvalidParameterResponseSchema,
@@ -25,9 +30,6 @@ import {
     INVALID_STRING_VALUES,
 } from '../../../test-data/static/util/invalid-values';
 
-/** An id no record holds: the largest the column allows. */
-const UNKNOWN_ID = 2147483647;
-
 /** Universal type mismatches per field. Omitting a field is the omission test's row. */
 const TYPE_MISMATCHES: readonly { field: string; value: unknown }[] = [
     ...INVALID_NUMBER_VALUES.map((value) => ({ field: 'leaveTypeId', value })),
@@ -41,7 +43,7 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         description: 'GET a leave type',
         params: {
             method: 'GET',
-            url: `${ApiEndpoints.LEAVE_TYPES}/${UNKNOWN_ID}`,
+            url: `${ApiEndpoints.LEAVE_TYPES}/${UNKNOWN_RECORD_ID}`,
         },
     },
     {
@@ -49,14 +51,14 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         params: {
             method: 'DELETE',
             url: ApiEndpoints.LEAVE_TYPES,
-            body: { ids: [UNKNOWN_ID] },
+            body: { ids: [UNKNOWN_RECORD_ID] },
         },
     },
     {
         description: 'GET an entitlement',
         params: {
             method: 'GET',
-            url: `${ApiEndpoints.LEAVE_ENTITLEMENTS}/${UNKNOWN_ID}`,
+            url: `${ApiEndpoints.LEAVE_ENTITLEMENTS}/${UNKNOWN_RECORD_ID}`,
         },
     },
     {
@@ -64,7 +66,7 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         params: {
             method: 'DELETE',
             url: ApiEndpoints.LEAVE_ENTITLEMENTS,
-            body: { ids: [UNKNOWN_ID] },
+            body: { ids: [UNKNOWN_RECORD_ID] },
         },
     },
     {
@@ -72,14 +74,14 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         params: {
             method: 'DELETE',
             url: ApiEndpoints.LEAVE_HOLIDAYS,
-            body: { ids: [UNKNOWN_ID] },
+            body: { ids: [UNKNOWN_RECORD_ID] },
         },
     },
     {
         description: "PUT an employee's leave request",
         params: {
             method: 'PUT',
-            url: `${ApiEndpoints.LEAVE_EMPLOYEE_REQUESTS}/${UNKNOWN_ID}`,
+            url: `${ApiEndpoints.LEAVE_EMPLOYEE_REQUESTS}/${UNKNOWN_RECORD_ID}`,
             body: { action: LeaveActions.CANCEL },
         },
     },
@@ -87,7 +89,7 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         description: 'PUT one day of leave',
         params: {
             method: 'PUT',
-            url: `${ApiEndpoints.LEAVE_DAYS}/${UNKNOWN_ID}`,
+            url: `${ApiEndpoints.LEAVE_DAYS}/${UNKNOWN_RECORD_ID}`,
             body: { action: LeaveActions.CANCEL },
         },
     },
@@ -95,7 +97,7 @@ const NOT_FOUND_CALLS: { description: string; params: ApiRequestParams }[] = [
         description: 'POST a comment on a leave request',
         params: {
             method: 'POST',
-            url: `${ApiEndpoints.LEAVE_REQUESTS}/${UNKNOWN_ID}${ApiEndpoints.LEAVE_COMMENTS_SUFFIX}`,
+            url: `${ApiEndpoints.LEAVE_REQUESTS}/${UNKNOWN_RECORD_ID}${ApiEndpoints.LEAVE_COMMENTS_SUFFIX}`,
             body: { comment: createLeaveComment() },
         },
     },
@@ -190,6 +192,7 @@ test.describe('api/v2/leave validation', () => {
             });
 
             for (const { field, value } of [
+                { field: 'leaveTypeId', value: UNKNOWN_RECORD_ID },
                 ...INVALID_LEAVE_REQUEST_VALUES,
                 ...TYPE_MISMATCHES,
             ]) {
@@ -261,7 +264,7 @@ test.describe('api/v2/leave validation', () => {
         async ({ apiRequest }) => {
             const { status, body } = await apiRequest({
                 method: 'GET',
-                url: `${ApiEndpoints.LEAVE_BALANCE_BY_TYPE}/${UNKNOWN_ID}`,
+                url: `${ApiEndpoints.LEAVE_BALANCE_BY_TYPE}/${UNKNOWN_RECORD_ID}`,
                 baseUrl: appConfig.apiUrl,
             });
 
@@ -270,16 +273,25 @@ test.describe('api/v2/leave validation', () => {
         }
     );
 
-    // FIXME: no ticket yet. The annotations document a 404 for the work week, and one always exists, so no request reaches it.
+    // FIXME: no ticket yet. The annotations document a 404 on PUT for the work week, and one always exists, so no request reaches it.
     // eslint-disable-next-line playwright/no-skipped-test -- the Constitution's form for a documented status the application does not honour
     test.skip(
         'should answer 404 when the work week does not exist',
         { tag: '@api' },
         async ({ apiRequest }) => {
             const { status, body } = await apiRequest({
-                method: 'GET',
+                method: 'PUT',
                 url: ApiEndpoints.LEAVE_WORK_WEEK,
                 baseUrl: appConfig.apiUrl,
+                body: {
+                    monday: WorkWeekDayLengths.FULL_DAY,
+                    tuesday: WorkWeekDayLengths.FULL_DAY,
+                    wednesday: WorkWeekDayLengths.FULL_DAY,
+                    thursday: WorkWeekDayLengths.FULL_DAY,
+                    friday: WorkWeekDayLengths.FULL_DAY,
+                    saturday: WorkWeekDayLengths.NON_WORKING,
+                    sunday: WorkWeekDayLengths.NON_WORKING,
+                },
             });
 
             expect(status).toBe(404);

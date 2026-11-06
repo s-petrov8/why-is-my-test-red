@@ -9,19 +9,11 @@ import { ApiEndpoints, UserRoleIds } from '../../enums/app/app';
 import { createAuthenticatedContext } from './createStorageState';
 import { createEmployeeData } from '../../test-data/factories/app/employee.factory';
 import { createUserData } from '../../test-data/factories/app/user.factory';
-import {
-    DeleteEmployeesResponseSchema,
-    EmployeeResponseSchema,
-} from '../../fixtures/api/schemas/app/employeeSchema';
-import { RecordsNotFoundResponseSchema } from '../../fixtures/api/schemas/app/errorSchema';
-import {
-    DeleteUsersResponseSchema,
-    UserResponseSchema,
-} from '../../fixtures/api/schemas/app/userSchema';
 
 /**
  * Provisioning for throwaway persons: an employee, the account that signs in as
- * them, and a signed-in browser session.
+ * them, and a signed-in browser session. This is shared setup and teardown, so it
+ * checks statuses and reads only what it needs, as the project overrides require.
  *
  * NOTE: a PIM employee is a personnel record, NOT a login. Creating one produces
  * nobody who can sign in, which is why `createTempUser` always creates both.
@@ -37,6 +29,14 @@ export type TempUser = {
     password: string;
     /** Full name as the employee autocomplete and results tables render it. */
     employeeFullName: string;
+};
+
+/** The fields of a created employee that a throwaway person needs. */
+type TempEmployeeFields = {
+    empNumber: number;
+    firstName: string;
+    middleName: string;
+    lastName: string;
 };
 
 /** What can differ from a plain ESS account. */
@@ -67,9 +67,8 @@ export async function createTempUser(
 
     expect(employeeResponse.status()).toBe(200);
 
-    const employee = EmployeeResponseSchema.parse(
-        await employeeResponse.json()
-    ).data;
+    const { data: employee }: { data: TempEmployeeFields } =
+        await employeeResponse.json();
 
     const userPayload = createUserData(employee.empNumber, options);
     const userResponse = await context.post(ApiEndpoints.ADMIN_USERS, {
@@ -78,7 +77,7 @@ export async function createTempUser(
 
     expect(userResponse.status()).toBe(200);
 
-    const user = UserResponseSchema.parse(await userResponse.json()).data;
+    const { data: user }: { data: { id: number } } = await userResponse.json();
 
     return {
         empNumber: employee.empNumber,
@@ -112,26 +111,12 @@ export async function deleteTempUser(
 
     expect([200, 404]).toContain(deleteUserResponse.status());
 
-    if (deleteUserResponse.status() === 200) {
-        expect(
-            DeleteUsersResponseSchema.parse(await deleteUserResponse.json())
-        ).toBeTruthy();
-    }
-
     const deleteEmployeeResponse = await context.delete(
         ApiEndpoints.PIM_EMPLOYEES,
         { data: { ids: [user.empNumber] } }
     );
 
     expect([200, 404]).toContain(deleteEmployeeResponse.status());
-
-    const deleteBody = await deleteEmployeeResponse.json();
-
-    if (deleteEmployeeResponse.status() === 200) {
-        expect(DeleteEmployeesResponseSchema.parse(deleteBody)).toBeTruthy();
-    } else {
-        expect(RecordsNotFoundResponseSchema.parse(deleteBody)).toBeTruthy();
-    }
 }
 
 /**

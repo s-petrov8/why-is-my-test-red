@@ -6,7 +6,10 @@ import {
     ReservedHolidayWeeks,
     WorkWeekDayLengths,
 } from '../../../enums/app/app';
-import { WorkWeek } from '../../../fixtures/api/schemas/app/leaveSchema';
+import {
+    WorkWeek,
+    WorkWeekResponseSchema,
+} from '../../../fixtures/api/schemas/app/leaveSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
 import {
     applyForLeave,
@@ -229,16 +232,23 @@ test.describe('api/v2/leave working days and holidays', () => {
         async ({ apiRequest, leaveType, newLeaveEmployee }) => {
             const { friday } = getLeaveWeek();
             const employee = await newLeaveEmployee();
-            const workWeek = await readWorkWeek(apiRequest);
             let requestId = 0;
+
+            const workWeek =
+                await test.step('GIVEN the current work week', () =>
+                    readWorkWeek(apiRequest));
 
             workWeekToRestore = workWeek;
 
-            await test.step('GIVEN Friday is made a half day', async () => {
-                await updateWorkWeek(apiRequest, {
+            await test.step('AND Friday is made a half day', async () => {
+                const body = await updateWorkWeek(apiRequest, {
                     ...workWeek,
                     friday: WorkWeekDayLengths.HALF_DAY,
                 });
+
+                expect(WorkWeekResponseSchema.parse(body).data.friday).toBe(
+                    WorkWeekDayLengths.HALF_DAY
+                );
             });
 
             await test.step('WHEN the employee applies for the whole Friday', async () => {

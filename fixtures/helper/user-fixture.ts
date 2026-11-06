@@ -73,26 +73,18 @@ export const test = base.extend<UserFixtures>({
      * Hands the test a function that creates a throwaway person on demand, and
      * deletes every person it created afterwards.
      */
-    newTempUser: async ({}, use) => {
-        const context = await createAuthenticatedContext();
+    newTempUser: async ({ adminContext }, use) => {
         const created: TempUser[] = [];
 
-        try {
-            await use(async (options?: TempUserOptions): Promise<TempUser> => {
-                const user = await createTempUser(context, options);
-                created.push(user);
+        await use(async (options?: TempUserOptions): Promise<TempUser> => {
+            const user = await createTempUser(adminContext, options);
+            created.push(user);
 
-                return user;
-            });
-        } finally {
-            try {
-                for (const user of [...created].reverse()) {
-                    await deleteTempUser(context, user);
-                }
-            } finally {
-                // Nested so a failed delete assertion cannot leak the context.
-                await context.dispose();
-            }
+            return user;
+        });
+
+        for (const user of [...created].reverse()) {
+            await deleteTempUser(adminContext, user);
         }
     },
     /**

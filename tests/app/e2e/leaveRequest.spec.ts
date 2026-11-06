@@ -23,8 +23,13 @@ test.describe('leave request approval', () => {
         'should let an employee request leave and their supervisor approve it',
         { tag: '@e2e' },
         async ({ tempLeaveApprovalUsers, signInAs }) => {
-            const { applicant, supervisor, leaveTypeName, leaveDate } =
-                tempLeaveApprovalUsers;
+            const {
+                applicant,
+                supervisor,
+                leaveTypeName,
+                leaveDate,
+                leavePeriod,
+            } = tempLeaveApprovalUsers;
 
             const employeeSession = await signInAs(applicant);
             const managerSession = await signInAs(supervisor);
@@ -52,8 +57,12 @@ test.describe('leave request approval', () => {
                 ).toBeVisible();
             });
 
-            await test.step('WHEN the manager opens their Leave List', async () => {
+            await test.step('WHEN the manager opens their Leave List for that leave period', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequests({
+                    employeeName: applicant.employeeFullName,
+                    ...leavePeriod,
+                });
             });
 
             await test.step('THEN it holds that request, awaiting approval', async () => {
@@ -92,6 +101,7 @@ test.describe('leave request approval', () => {
                 supervisor,
                 leaveTypeName,
                 leaveDate,
+                leavePeriod,
                 entitledDays,
             } = tempLeaveApprovalUsers;
 
@@ -113,6 +123,10 @@ test.describe('leave request approval', () => {
 
             await test.step('WHEN the manager opens its details from the Leave List', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequests({
+                    employeeName: applicant.employeeFullName,
+                    ...leavePeriod,
+                });
                 await managerSession.leaveListPage.openDetailsFor(
                     applicant.employeeFullName
                 );
@@ -135,6 +149,14 @@ test.describe('leave request approval', () => {
 
             await test.step('THEN the employee sees it scheduled, with the day off their balance', async () => {
                 await employeeSession.myLeaveListPage.openMyLeaveList();
+
+                await expect(
+                    employeeSession.myLeaveListPage.heading
+                ).toBeVisible();
+
+                await employeeSession.myLeaveListPage.filterToPeriod(
+                    leavePeriod
+                );
 
                 await expect(
                     employeeSession.myLeaveListPage.rowForDate(leaveDate)
@@ -173,8 +195,13 @@ test.describe('leave request approval', () => {
         'should show a rejection and its comment to the employee, who can then re-apply for the date',
         { tag: '@e2e' },
         async ({ tempLeaveApprovalUsers, signInAs }) => {
-            const { applicant, supervisor, leaveTypeName, leaveDate } =
-                tempLeaveApprovalUsers;
+            const {
+                applicant,
+                supervisor,
+                leaveTypeName,
+                leaveDate,
+                leavePeriod,
+            } = tempLeaveApprovalUsers;
             const comment = createLeaveComment();
 
             const employeeSession = await signInAs(applicant);
@@ -195,6 +222,10 @@ test.describe('leave request approval', () => {
 
             await test.step('WHEN the manager comments on it', async () => {
                 await managerSession.leaveListPage.openLeaveListPage();
+                await managerSession.leaveListPage.searchLeaveRequests({
+                    employeeName: applicant.employeeFullName,
+                    ...leavePeriod,
+                });
                 await managerSession.leaveListPage.openDetailsFor(
                     applicant.employeeFullName
                 );
@@ -217,6 +248,9 @@ test.describe('leave request approval', () => {
 
             await test.step('THEN the employee sees the rejection and the comment', async () => {
                 await employeeSession.myLeaveListPage.openMyLeaveList();
+                await employeeSession.myLeaveListPage.filterToPeriod(
+                    leavePeriod
+                );
 
                 await expect(
                     employeeSession.myLeaveListPage.rowForDate(leaveDate)
