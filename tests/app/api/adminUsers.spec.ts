@@ -85,7 +85,7 @@ test.describe('api/v2 admin users', () => {
                     },
                 },
                 {
-                    description: 'disable and rename an account',
+                    description: 'rename, disable and promote an account',
                     params: {
                         method: 'PUT',
                         url: accountOf(target),
@@ -124,6 +124,19 @@ test.describe('api/v2 admin users', () => {
                     expect(status, JSON.stringify(body)).toBe(403);
                 });
             }
+
+            await test.step('WHEN an admin checks that username, THEN it is free', async () => {
+                const { status, body } = await apiRequest<{
+                    data: { valid: boolean };
+                }>({
+                    method: 'GET',
+                    url: `${ApiEndpoints.ADMIN_USERNAME_CHECK}?userName=${newAccount.username}`,
+                    baseUrl: appConfig.apiUrl,
+                });
+
+                expect(status, JSON.stringify(body)).toBe(200);
+                expect(body.data.valid).toBe(true);
+            });
 
             await test.step('THEN the target account is unchanged', async () => {
                 const { status, body } = await apiRequest<{
