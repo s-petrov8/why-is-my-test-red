@@ -125,16 +125,24 @@ test.describe('account lifecycle', () => {
                 ).toContainText(UserStatuses.DISABLED);
             });
 
-            await test.step("WHEN the person opens another page, THEN they're sent to the login page", async () => {
+            await test.step('WHEN the person opens another page, THEN the login page says the account is disabled', async () => {
                 await person.mainMenu.menuLink(ESS_MENU_ITEMS[0]).click();
 
                 await expect(person.loginPage.heading).toBeVisible();
                 await expect(person.loginPage.heading.page()).toHaveURL(
                     `${appConfig.appUrl}${Routes.LOGIN}`
                 );
+                await expect(person.loginPage.errorAlert).toHaveText(
+                    Messages.ACCOUNT_DISABLED
+                );
             });
 
-            await test.step('WHEN they sign in again, THEN the login page says the account is disabled', async () => {
+            await test.step('WHEN they sign in again from a clean login page, THEN they are refused for the same reason', async () => {
+                await person.loginPage.openLoginPage();
+
+                await expect(person.loginPage.loginButton).toBeVisible();
+                await expect(person.loginPage.errorAlert).toHaveCount(0);
+
                 await person.loginPage.login(username, password);
 
                 await expect(person.loginPage.errorAlert).toHaveText(

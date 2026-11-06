@@ -80,6 +80,11 @@ export class SaveSystemUserPage {
         return this.toast.getByText(Messages.UPDATED_SUCCESSFULLY);
     }
 
+    get errorMessage(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the toast carries no alert role; only its class identifies it as an error
+        return this.page.locator('.oxd-toast--error');
+    }
+
     get fieldErrors(): Locator {
         // eslint-disable-next-line playwright/no-raw-locators -- a field's validation message has no role and no link to its input
         return this.page.locator('.oxd-input-field-error-message');

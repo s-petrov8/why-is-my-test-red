@@ -8,7 +8,11 @@ import {
 } from '../../../enums/app/app';
 import { PasswordCheckResponseSchema } from '../../../fixtures/api/schemas/app/userSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
-import { attemptSignIn, updateAccount } from '../../../helpers/app/adminUser';
+import {
+    attemptSignIn,
+    readLoginMessage,
+    updateAccount,
+} from '../../../helpers/app/adminUser';
 import {
     createUserData,
     createUserUpdateData,
@@ -199,6 +203,19 @@ test.describe('api/v2 admin users', () => {
                 });
 
                 expect(status, JSON.stringify(body)).toBe(401);
+            });
+
+            // The edit also changes the account's modified time, which ends a session by
+            // itself, with "Session Expired". Only the reason shows the status rule held.
+            await test.step('THEN the session ended because the account is disabled', async () => {
+                const { status, body } = await person.api<string>({
+                    method: 'GET',
+                    url: Routes.LOGIN,
+                    baseUrl: appConfig.apiUrl,
+                });
+
+                expect(status, body).toBe(200);
+                expect(readLoginMessage(body)).toBe(Messages.ACCOUNT_DISABLED);
             });
 
             await test.step('THEN signing in is refused, naming the reason', async () => {
@@ -458,7 +475,9 @@ test.describe('api/v2 admin users', () => {
                 });
 
                 await test.step(`WHEN the password check reads ${description}, THEN it names ${rule}`, async () => {
-                    const { status, body } = await apiRequest({
+                    const { status, body } = await apiRequest<{
+                        data: { messages: string[] };
+                    }>({
                         method: 'POST',
                         url: ApiEndpoints.PASSWORD_CHECK,
                         baseUrl: appConfig.apiUrl,
@@ -466,9 +485,7 @@ test.describe('api/v2 admin users', () => {
                     });
 
                     expect(status, JSON.stringify(body)).toBe(200);
-                    expect(
-                        PasswordCheckResponseSchema.parse(body).data.messages
-                    ).toEqual([PasswordRules[rule]]);
+                    expect(body.data.messages).toEqual([PasswordRules[rule]]);
                 });
             }
 

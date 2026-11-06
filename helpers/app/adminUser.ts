@@ -49,6 +49,22 @@ export async function updateAccount(
 }
 
 /**
+ * Reads why the login page says a person was refused or signed out. The application
+ * keeps the reason until a login page shows it, once.
+ *
+ * @param {string} html - The raw HTML of the login page.
+ * @returns {string | undefined} The reason, when the page gives one.
+ */
+export function readLoginMessage(html: string): string | undefined {
+    const error = LOGIN_ERROR_PATTERN.exec(html)?.[1];
+
+    return error
+        ? (JSON.parse(error.replaceAll('&quot;', '"')) as { message: string })
+              .message
+        : undefined;
+}
+
+/**
  * Tries to sign in over HTTP, from a session of its own, and reports the outcome.
  *
  * A refused sign-in answers the same 302 to the login page whatever the reason, and
@@ -65,32 +81,23 @@ export async function attemptSignIn(user: TempUser): Promise<SignInAttempt> {
 
     try {
         const loginPage = await context.get(Routes.LOGIN);
-        expect(loginPage.status()).toBe(200);
+        const loginHtml = await loginPage.text();
+        expect(loginPage.status(), loginHtml).toBe(200);
 
         const validation = await context.post(ApiEndpoints.AUTH_VALIDATE, {
             form: {
-                _token: extractCsrfToken(await loginPage.text()),
+                _token: extractCsrfToken(loginHtml),
                 username: user.username,
                 password: user.password,
             },
             maxRedirects: 0,
         });
-        expect(validation.status()).toBe(302);
+        expect(validation.status(), await validation.text()).toBe(302);
 
         const location = validation.headers()['location'];
         const landing = await context.get(location);
-        const error = LOGIN_ERROR_PATTERN.exec(await landing.text())?.[1];
 
-        return {
-            location,
-            message: error
-                ? (
-                      JSON.parse(error.replaceAll('&quot;', '"')) as {
-                          message: string;
-                      }
-                  ).message
-                : undefined,
-        };
+        return { location, message: readLoginMessage(await landing.text()) };
     } finally {
         await context.dispose();
     }

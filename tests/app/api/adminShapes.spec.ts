@@ -37,13 +37,13 @@ test.describe('api/v2 admin shapes that setup, teardown and shared helpers rely 
         if (userIdToDelete !== undefined) {
             const id = userIdToDelete;
             userIdToDelete = undefined;
-            const { status } = await apiRequest({
+            const { status, body } = await apiRequest({
                 method: 'DELETE',
                 url: ApiEndpoints.ADMIN_USERS,
                 baseUrl: appConfig.apiUrl,
                 body: { ids: [id] },
             });
-            expect(status).toBe(200);
+            expect(status, JSON.stringify(body)).toBe(200);
         }
 
         if (workShiftIdToDelete !== undefined) {
