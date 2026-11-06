@@ -7,6 +7,9 @@ on:
             ohrm_version:
                 description: OrangeHRM image tag
                 default: '5.9'
+            ohrm_ref:
+                description: Upstream commit or tag to build from source, replacing the image tag
+                default: ''
             runs:
                 description: Number of independent runs, each on a fresh instance
                 default: '1'
@@ -56,7 +59,9 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            # This usually takes under a minute, but the apt download can hang.
             - name: Install Chromium
+              timeout-minutes: 5
               run: npx playwright install --with-deps chromium
 
             # Generated per run: the instance lives only on this runner.
@@ -68,6 +73,14 @@ jobs:
                   echo "::add-mask::$admin_password"
                   echo "DB_ROOT_PASSWORD=$db_password" >> "$GITHUB_ENV"
                   echo "ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+
+            - name: Build OrangeHRM from source
+              if: ${{ inputs.ohrm_ref != '' }}
+              env:
+                  OHRM_REF: ${{ inputs.ohrm_ref }}
+              run: |
+                  infra/build-orangehrm-from-ref.sh "$OHRM_REF" orangehrm-source:local
+                  echo "OHRM_IMAGE=orangehrm-source:local" >> "$GITHUB_ENV"
 
             - name: Start OrangeHRM
               run: infra/start-orangehrm.sh
