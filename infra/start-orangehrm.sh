@@ -2,15 +2,16 @@
 # Starts OrangeHRM, installs it unattended and waits until the login page answers.
 # Requires DB_ROOT_PASSWORD, ADMIN_USERNAME and ADMIN_PASSWORD in the environment.
 # COMPOSE_PROJECT_NAME and OHRM_PORT (default 8080) tell instances apart; see the README.
+# Only CI, where the runner holds a single instance, may leave the project name out.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 # Without a project name every checkout is the project "infra", so a second
 # instance would replace the first one's containers while its suite runs.
-if [[ "${OHRM_PORT:-8080}" != "8080" && -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
-    echo "OHRM_PORT=$OHRM_PORT needs COMPOSE_PROJECT_NAME too, or this instance would replace another one's containers." >&2
-    echo "For example: COMPOSE_PROJECT_NAME=ohrm-b OHRM_PORT=$OHRM_PORT infra/start-orangehrm.sh" >&2
+if [[ -z "${COMPOSE_PROJECT_NAME:-}" && ( -z "${CI:-}" || "${OHRM_PORT:-8080}" != "8080" ) ]]; then
+    echo "COMPOSE_PROJECT_NAME is required, or this instance could replace another one's containers." >&2
+    echo "For example: COMPOSE_PROJECT_NAME=ohrm-a OHRM_PORT=${OHRM_PORT:-8080} infra/start-orangehrm.sh" >&2
     exit 1
 fi
 
