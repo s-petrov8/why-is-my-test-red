@@ -42,7 +42,8 @@ jobs:
             ADMIN_USERNAME: Admin
             APP_URL: http://localhost:8080
             API_URL: http://localhost:8080
-            PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report/results.json
+            # Outside playwright-report/, which the HTML reporter clears when it writes.
+            PLAYWRIGHT_JSON_OUTPUT_NAME: json-report/results.json
 
         steps:
             - uses: actions/checkout@v7
@@ -72,7 +73,7 @@ jobs:
               run: infra/start-orangehrm.sh
 
             - name: Run Playwright tests
-              run: npx playwright test --reporter=json,html
+              run: npx playwright test --reporter=list,json,html
 
             - name: Collect application logs
               if: ${{ !cancelled() }}
@@ -88,6 +89,7 @@ jobs:
               with:
                   name: evidence-run-${{ matrix.run }}
                   path: |
+                      json-report/
                       playwright-report/
                       test-results/
                       app-logs/
