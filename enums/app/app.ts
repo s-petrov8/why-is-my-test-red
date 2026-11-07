@@ -28,6 +28,8 @@ export enum Messages {
     // Employee details and reporting lines
 
     // Admin users and roles
+    ACCOUNT_DISABLED = 'Account disabled',
+    CREDENTIAL_REQUIRED = 'Credential Required',
 
     // Leave
     LEAVE_SUBMIT_FAILED = 'Failed to Submit',
@@ -108,6 +110,33 @@ export enum UserRoleIds {
     ESS = 2,
 }
 
+/** Built-in user roles, as the user screens name them */
+export enum UserRoleNames {
+    ADMIN = 'Admin',
+    ESS = 'ESS',
+}
+
+/** Account statuses, as the user screens name them */
+export enum UserStatuses {
+    ENABLED = 'Enabled',
+    DISABLED = 'Disabled',
+}
+
+/**
+ * What the password check says about a password that breaks one rule. It lists a
+ * guessable password only when no other rule is broken.
+ */
+export enum PasswordRules {
+    TOO_SHORT = 'Should have at least 8 characters',
+    TOO_LONG = 'Should not exceed 64 characters',
+    NO_UPPER_CASE = 'Your password must contain minimum 1 upper-case letter',
+    NO_LOWER_CASE = 'Your password must contain minimum 1 lower-case letter',
+    NO_DIGIT = 'Your password must contain minimum 1 number',
+    NO_SPECIAL_CHARACTER = 'Your password must contain minimum 1 special character',
+    CONTAINS_SPACE = 'Your password should not contain spaces',
+    GUESSABLE = 'Your password meets the minimum requirements, but it could be guessable',
+}
+
 /** Ids of the built-in reporting methods */
 export enum ReportingMethodIds {
     DIRECT = 1,
@@ -126,6 +155,8 @@ export enum ApiEndpoints {
     // Admin users and roles
     ADMIN_USERS = '/web/index.php/api/v2/admin/users',
     ADMIN_WORK_SHIFTS = '/web/index.php/api/v2/admin/work-shifts',
+    ADMIN_USERNAME_CHECK = '/web/index.php/api/v2/admin/validation/user-name',
+    PASSWORD_CHECK = '/web/index.php/api/v2/auth/public/validation/password',
 
     // Leave
     LEAVE_PERIOD = '/web/index.php/api/v2/leave/leave-period',
@@ -152,6 +183,7 @@ export enum Routes {
     PIM_EMPLOYEE_LIST = '/web/index.php/pim/viewEmployeeList',
 
     // Admin users and roles
+    ADMIN_SYSTEM_USERS = '/web/index.php/admin/viewSystemUsers',
 
     // Leave
     LEAVE_APPLY = '/web/index.php/leave/applyLeave',

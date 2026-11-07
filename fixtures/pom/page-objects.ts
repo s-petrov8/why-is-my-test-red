@@ -6,6 +6,9 @@ import { LoginPage } from '../../pages/app/login.page';
 import { EmployeeListPage } from '../../pages/app/employeeList.page';
 
 // Admin users and roles
+import { SaveSystemUserPage } from '../../pages/app/saveSystemUser.page';
+import { SystemUsersPage } from '../../pages/app/systemUsers.page';
+import { MainMenuComponent } from '../../pages/components/mainMenu.component';
 
 // Leave
 import { ApplyLeavePage } from '../../pages/app/applyLeave.page';
@@ -47,6 +50,9 @@ export type PageObjects = {
     employeeListPage: EmployeeListPage;
 
     // Admin users and roles
+    mainMenu: MainMenuComponent;
+    saveSystemUserPage: SaveSystemUserPage;
+    systemUsersPage: SystemUsersPage;
 
     // Leave
     applyLeavePage: ApplyLeavePage;
@@ -79,6 +85,9 @@ export function createPageObjects(page: Page): PageObjects {
         employeeListPage: new EmployeeListPage(page),
 
         // Admin users and roles
+        mainMenu: new MainMenuComponent(page),
+        saveSystemUserPage: new SaveSystemUserPage(page),
+        systemUsersPage: new SystemUsersPage(page),
 
         // Leave
         applyLeavePage: new ApplyLeavePage(page),
