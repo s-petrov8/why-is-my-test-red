@@ -88,50 +88,6 @@ export async function createAuthenticatedContext(credentials?: {
 }
 
 /**
- * Submits credentials the application is expected to refuse, and reads the login
- * page it redirects back to, which carries the reason for the refusal.
- *
- * @param {object} credentials - Who tries to sign in.
- * @param {string} credentials.username - Username to submit.
- * @param {string} credentials.password - Password to submit.
- * @returns {Promise<string>} The markup of the login page after the refusal.
- */
-export async function readSignInRefusal(credentials: {
-    username: string;
-    password: string;
-}): Promise<string> {
-    const { username, password } = credentials;
-    const context = await request.newContext({
-        baseURL: appConfig.appUrl,
-        storageState: ANONYMOUS_STORAGE_STATE,
-    });
-
-    try {
-        const loginPage = await context.get(Routes.LOGIN);
-        expect(loginPage.status()).toBe(200);
-
-        const validation = await context.post(ApiEndpoints.AUTH_VALIDATE, {
-            form: {
-                _token: extractCsrfToken(await loginPage.text()),
-                username,
-                password,
-            },
-            maxRedirects: 0,
-        });
-
-        expect(validation.status()).toBe(302);
-        expect(validation.headers()['location']).toContain(Routes.LOGIN);
-
-        const refusalPage = await context.get(Routes.LOGIN);
-        expect(refusalPage.status()).toBe(200);
-
-        return await refusalPage.text();
-    } finally {
-        await context.dispose();
-    }
-}
-
-/**
  * Creates and saves the browser storage state for an authenticated session.
  * This is used for authentication setup before running tests.
  *

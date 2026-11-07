@@ -3,6 +3,8 @@ import { UserRoleIds } from '../../../enums/app/app';
 import {
     CreateUserRequest,
     CreateUserRequestSchema,
+    UpdateUserRequest,
+    UpdateUserRequestSchema,
 } from '../../../fixtures/api/schemas/app/userSchema';
 
 /**
@@ -61,3 +63,25 @@ export const createUserData = (
 
     return CreateUserRequestSchema.parse(mergedUser);
 };
+
+/**
+ * Builds the payload of an edit that leaves the account's password as it is.
+ *
+ * @param {object} account - The account being edited, and its values after the edit.
+ * @param {string} account.username - The account's username.
+ * @param {number} account.empNumber - The PIM employee the account signs in as.
+ * @param {boolean} account.status - Whether the account is enabled.
+ * @param {UserRoleIds} account.userRoleId - The account's role.
+ * @returns {UpdateUserRequest} A valid payload matching the UpdateUserRequestSchema.
+ */
+export const createUserUpdateData = (account: {
+    username: string;
+    empNumber: number;
+    status: boolean;
+    userRoleId: UserRoleIds;
+}): UpdateUserRequest =>
+    UpdateUserRequestSchema.parse({
+        ...account,
+        password: '',
+        changePassword: false,
+    });

@@ -1,5 +1,5 @@
 import { appConfig } from '../../../config/app';
-import { ApiEndpoints, Messages } from '../../../enums/app/app';
+import { ApiEndpoints, Messages, Routes } from '../../../enums/app/app';
 import {
     EmployeeListResponse,
     EmployeeResponse,
@@ -8,7 +8,7 @@ import {
     TerminationResponseSchema,
 } from '../../../fixtures/api/schemas/app/employeeSchema';
 import { expect, test } from '../../../fixtures/pom/test-options';
-import { readSignInRefusal } from '../../../helpers/app/createStorageState';
+import { attemptSignIn } from '../../../helpers/app/adminUser';
 import {
     reactivateEmployee,
     submitReactivation,
@@ -192,16 +192,23 @@ test.describe('api/v2/pim/employees terminations', () => {
             });
 
             await test.step('AND a new sign-in is refused, naming the termination', async () => {
-                expect(await readSignInRefusal(user)).toContain(
-                    Messages.EMPLOYEE_TERMINATED
-                );
+                const attempt = await attemptSignIn(user);
+
+                expect(attempt.location).toContain(Routes.LOGIN);
+                expect(attempt.message).toBe(Messages.EMPLOYEE_TERMINATED);
             });
 
             await test.step('WHEN they are reactivated', async () => {
                 await reactivateEmployee(apiRequest, user.empNumber);
             });
 
-            await test.step('THEN they can sign in and reach their record', async () => {
+            await test.step('THEN signing in works again', async () => {
+                const attempt = await attemptSignIn(user);
+
+                expect(attempt.location).toContain(Routes.DASHBOARD);
+            });
+
+            await test.step('AND a new session reaches their record', async () => {
                 const newSession = await apiRequestAs(user);
                 const { status } = await newSession({
                     method: 'GET',

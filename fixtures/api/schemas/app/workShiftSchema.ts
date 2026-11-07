@@ -12,7 +12,12 @@ export const CreateWorkShiftRequestSchema = z.strictObject({
     empNumbers: z.array(z.int()),
 });
 
-/** `POST /api/v2/admin/work-shifts`. */
+/**
+ * `POST /api/v2/admin/work-shifts`.
+ *
+ * FIXME: no ticket yet. The annotations document `meta` as an object, and don't document
+ * `rels`.
+ */
 export const WorkShiftResponseSchema = z.strictObject({
     data: z.strictObject({
         id: z.int(),
@@ -25,7 +30,12 @@ export const WorkShiftResponseSchema = z.strictObject({
     rels: z.array(z.unknown()),
 });
 
-/** `DELETE /api/v2/admin/work-shifts`: the ids that were deleted. */
+/**
+ * `DELETE /api/v2/admin/work-shifts`: the ids that were deleted.
+ *
+ * FIXME: no ticket yet. The annotations' `DeleteResponse` documents `meta` as an object
+ * and doesn't document `rels`.
+ */
 export const DeleteWorkShiftsResponseSchema = z.strictObject({
     data: z.array(z.int()),
     meta: z.array(z.unknown()),
