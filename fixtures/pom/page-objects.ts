@@ -4,6 +4,7 @@ import { LoginPage } from '../../pages/app/login.page';
 
 // Employee details and reporting lines
 import { EmployeeListPage } from '../../pages/app/employeeList.page';
+import { EmployeeJobPage } from '../../pages/app/employeeJob.page';
 
 // Admin users and roles
 import { SaveSystemUserPage } from '../../pages/app/saveSystemUser.page';
@@ -48,6 +49,7 @@ export type PageObjects = {
 
     // Employee details and reporting lines
     employeeListPage: EmployeeListPage;
+    employeeJobPage: EmployeeJobPage;
 
     // Admin users and roles
     mainMenu: MainMenuComponent;
@@ -83,6 +85,7 @@ export function createPageObjects(page: Page): PageObjects {
 
         // Employee details and reporting lines
         employeeListPage: new EmployeeListPage(page),
+        employeeJobPage: new EmployeeJobPage(page),
 
         // Admin users and roles
         mainMenu: new MainMenuComponent(page),

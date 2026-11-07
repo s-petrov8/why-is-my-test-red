@@ -1,5 +1,6 @@
 import { Locator, Page } from '@playwright/test';
-import { Messages } from '../../enums/app/app';
+import { appConfig } from '../../config/app';
+import { Messages, Routes } from '../../enums/app/app';
 
 /**
  * Page Object for Leave Request Details (reached from the Leave List), where an
@@ -70,7 +71,27 @@ export class LeaveRequestDetailsPage {
         return this.page.locator('.oxd-input-field-error-message');
     }
 
+    get noRecordsAlert(): Locator {
+        return this.page
+            .getByRole('alert')
+            .getByText(Messages.NO_RECORDS_FOUND);
+    }
+
     // ==================== Actions ====================
+
+    /**
+     * Opens one leave request directly by its id. Someone with no access to it gets
+     * {@link noRecordsAlert} in place of its details.
+     *
+     * @param {number} leaveRequestId - The leave request.
+     * @returns {Promise<void>} Resolves when navigation is complete.
+     */
+    async openLeaveRequest(leaveRequestId: number): Promise<void> {
+        await this.page.goto(
+            `${appConfig.appUrl}${Routes.LEAVE_REQUEST_DETAILS}/${leaveRequestId}`,
+            { waitUntil: 'domcontentloaded' }
+        );
+    }
 
     /**
      * Adds a comment to the whole request.

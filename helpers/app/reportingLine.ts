@@ -35,3 +35,24 @@ export async function assignSupervisor(
 
     expect(response.status()).toBe(200);
 }
+
+/**
+ * Removes one employee from another's reporting line.
+ *
+ * @param {APIRequestContext} context - An authenticated request context.
+ * @param {object} reportingLine - Who reports to whom.
+ * @param {number} reportingLine.empNumber - The subordinate.
+ * @param {number} reportingLine.supervisorEmpNumber - The supervisor to remove.
+ * @returns {Promise<void>} Resolves once the reporting line is gone.
+ */
+export async function removeSupervisor(
+    context: APIRequestContext,
+    reportingLine: { empNumber: number; supervisorEmpNumber: number }
+): Promise<void> {
+    const response = await context.delete(
+        `${ApiEndpoints.PIM_EMPLOYEES}/${reportingLine.empNumber}${ApiEndpoints.PIM_SUPERVISORS_SUFFIX}`,
+        { data: { ids: [reportingLine.supervisorEmpNumber] } }
+    );
+
+    expect(response.status(), await response.text()).toBe(200);
+}

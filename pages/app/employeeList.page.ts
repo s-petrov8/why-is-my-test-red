@@ -1,6 +1,11 @@
 import { Locator, Page, Response } from '@playwright/test';
 import { appConfig } from '../../config/app';
-import { ApiEndpoints, Messages, Routes } from '../../enums/app/app';
+import {
+    ApiEndpoints,
+    EmployeeIncludeOptions,
+    Messages,
+    Routes,
+} from '../../enums/app/app';
 
 /**
  * Page Object for the PIM employee list (`/pim/viewEmployeeList`).
@@ -21,6 +26,15 @@ export class EmployeeListPage {
 
     get employeeIdInput(): Locator {
         return this.filterField('Employee Id').getByRole('textbox');
+    }
+
+    get includeDropdown(): Locator {
+        // eslint-disable-next-line playwright/no-raw-locators -- the select trigger is a tabindex div with no role and no accessible name
+        return this.filterField('Include').locator('.oxd-select-text');
+    }
+
+    includeOption(option: EmployeeIncludeOptions): Locator {
+        return this.page.getByRole('option', { name: option, exact: true });
     }
 
     get searchButton(): Locator {
@@ -124,6 +138,17 @@ export class EmployeeListPage {
     async searchByEmployeeId(employeeId: string): Promise<void> {
         await this.employeeIdInput.fill(employeeId);
         await this.submitSearch();
+    }
+
+    /**
+     * Chooses which employees the next search includes, by their employment.
+     *
+     * @param {EmployeeIncludeOptions} option - The option to choose.
+     * @returns {Promise<void>} Resolves once the option is chosen.
+     */
+    async selectInclude(option: EmployeeIncludeOptions): Promise<void> {
+        await this.includeDropdown.click();
+        await this.includeOption(option).click();
     }
 
     /**

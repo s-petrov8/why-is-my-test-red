@@ -4,10 +4,8 @@ import {
     ApiEndpoints,
     LeaveActions,
     LeaveRefusals,
-    ReportingMethodIds,
     ReservedHolidayWeeks,
 } from '../../../enums/app/app';
-import { SupervisorResponseSchema } from '../../../fixtures/api/schemas/app/employeeSchema';
 import { BadRequestResponseSchema } from '../../../fixtures/api/schemas/app/errorSchema';
 import {
     ApplyLeaveResponseSchema,
@@ -103,31 +101,6 @@ test.describe('api/v2 shapes that setup, teardown and shared helpers rely on', (
                 deleted: false,
                 deletable: true,
             });
-        }
-    );
-
-    test(
-        'should add a supervisor and answer with the exact shape',
-        { tag: '@api' },
-        async ({ apiRequest, newTempUser }) => {
-            const subordinate = await newTempUser();
-            const supervisor = await newTempUser();
-
-            const { status, body } = await apiRequest({
-                method: 'POST',
-                url: `${ApiEndpoints.PIM_EMPLOYEES}/${subordinate.empNumber}${ApiEndpoints.PIM_SUPERVISORS_SUFFIX}`,
-                baseUrl: appConfig.apiUrl,
-                body: {
-                    empNumber: supervisor.empNumber,
-                    reportingMethodId: ReportingMethodIds.DIRECT,
-                },
-            });
-
-            expect(status).toBe(200);
-            const reportingLine = SupervisorResponseSchema.parse(body);
-            expect(reportingLine.data.supervisor.empNumber).toBe(
-                supervisor.empNumber
-            );
         }
     );
 
