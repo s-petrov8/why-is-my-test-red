@@ -2,13 +2,14 @@
 
 A learning project: a tool that explains why a test failed in CI. It will give each failure a verdict with evidence, using test output, application logs and what changed since the last passing build.
 
-The analyser does not exist yet. So far, this repo holds the system it will examine: a Playwright suite running against a private OrangeHRM.
+This repo holds the system the analyser examines, a Playwright suite running against a private OrangeHRM, and a first draft of the analyser with its scorer. `analyser/README.md` describes the analyser, its answer format and how it is scored.
 
 ## What's here
 
 - `tests/`, `pages/`, `fixtures/`, `helpers/`: the Playwright and TypeScript suite, copied from [playwright-qa-portfolio](https://github.com/s-petrov8/playwright-qa-portfolio).
 - `infra/`: starts OrangeHRM and MariaDB with Docker Compose and installs OrangeHRM unattended.
 - `.github/workflows/orangehrm-suite.yml`: runs the suite, one fresh instance per run, and uploads the test report and application logs.
+- `analyser/`: the failing-test lister, the scorer and the formats they use. The analyser skill is `.claude/skills/failure-analyser/`.
 
 ## Run it
 

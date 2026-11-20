@@ -21,7 +21,8 @@
         "setup": "bash scripts/setup.sh",
         "playwright-cli:install-browsers": "node scripts/install-playwright-cli-browsers.js",
         "setup:check": "node -e \"const v = +process.versions.node.split('.')[0]; if(v < 20) { console.error('Node >= 20 required, found ' + process.version); process.exit(1); }\" && bash scripts/link-cli.sh \"$PWD\" >/dev/null && playwright-cli --version && echo 'All checks passed'",
-        "postinstall": "is-ci || husky"
+        "postinstall": "is-ci || husky",
+        "test:analyser": "node --test analyser/*.test.ts"
     },
     "keywords": [],
     "author": "Stoyan Petrov",
