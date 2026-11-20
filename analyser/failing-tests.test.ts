@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -207,10 +207,8 @@ void describe('parseReport', () => {
     });
 
     void it('makes the command exit 2 with the reason on a malformed report', () => {
-        const file = path.join(
-            mkdtempSync(path.join(tmpdir(), 'failing-tests-')),
-            'results.json'
-        );
+        const dir = mkdtempSync(path.join(tmpdir(), 'failing-tests-'));
+        const file = path.join(dir, 'results.json');
         writeFileSync(file, JSON.stringify({ suites: 'none' }));
         const script = path.join(
             path.dirname(fileURLToPath(import.meta.url)),
@@ -221,5 +219,6 @@ void describe('parseReport', () => {
         });
         assert.equal(run.status, 2);
         assert.match(run.stderr, /report\.suites is not a list/);
+        rmSync(dir, { recursive: true, force: true });
     });
 });

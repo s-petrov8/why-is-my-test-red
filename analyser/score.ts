@@ -25,6 +25,12 @@ export const FLAKE_VERDICT: Verdict = 'test script problem';
 /** Shortest commit prefix the scorer accepts. */
 export const MIN_COMMIT_PREFIX = 7;
 
+/**
+ * The analyser skill's confidence threshold: below it a group's verdict is
+ * undetermined; at or above it a group has no leaning.
+ */
+export const CONFIDENCE_THRESHOLD = 0.7;
+
 export interface Card {
     fault_id: string;
     verdict: Verdict;
@@ -66,7 +72,8 @@ export type Reason =
     | 'extra tests in the group'
     | 'undetermined'
     | 'wrong verdict'
-    | 'wrong commit';
+    | 'wrong commit'
+    | 'breaks confidence rule';
 
 export interface Judgement {
     found: boolean;
@@ -141,6 +148,25 @@ function listSample(tests: string[]): string {
     return tests.length > 2 ? `${shown}; and ${tests.length - 2} more` : shown;
 }
 
+/**
+ * Checks a group against the confidence rule: below the threshold the verdict
+ * is undetermined, and at or above it there is no leaning.
+ * @param group - an answer group
+ * @returns how the group breaks the rule, or null when it keeps it
+ */
+export function confidenceRuleBreak(group: Group): string | null {
+    if (
+        group.confidence < CONFIDENCE_THRESHOLD &&
+        group.verdict !== 'undetermined'
+    ) {
+        return `says ${group.verdict} at confidence ${group.confidence}, below ${CONFIDENCE_THRESHOLD}`;
+    }
+    if (group.confidence >= CONFIDENCE_THRESHOLD && group.leaning) {
+        return `has a leaning at confidence ${group.confidence}, not below ${CONFIDENCE_THRESHOLD}`;
+    }
+    return null;
+}
+
 function touchingGroups(
     tests: string[],
     answer: Answer | undefined
@@ -188,6 +214,10 @@ function judge(expected: Expectation, answer: Answer | undefined): Judgement {
             'extra tests in the group',
             `group ${number} also holds ${listSample(extra)}`
         );
+    }
+    const broken = confidenceRuleBreak(group);
+    if (broken) {
+        return miss('breaks confidence rule', `group ${number} ${broken}`);
     }
     if (
         group.verdict === 'undetermined' &&
@@ -450,7 +480,7 @@ function asConfidence(value: unknown, where: string): number {
 }
 
 function asLeaning(value: unknown, where: string): Leaning | null {
-    if (value === undefined || value === null) return null;
+    if (value === null) return null;
     const leaning = asObject(value, where);
     const verdict = asVerdict(leaning.verdict, `${where}.verdict`);
     if (verdict === 'undetermined') {
@@ -459,13 +489,24 @@ function asLeaning(value: unknown, where: string): Leaning | null {
     return { verdict, commit: asCommit(leaning.commit, `${where}.commit`) };
 }
 
+function asNullableCommit(
+    json: Json,
+    key: string,
+    where: string
+): string | null {
+    if (!(key in json)) {
+        throw new Error(`${where}.${key} is missing; use null when unknown.`);
+    }
+    return asCommit(json[key], `${where}.${key}`);
+}
+
 function asLastPassed(value: unknown, where: string): LastPassed | null {
     if (value === null) return null;
     const lastPassed = asObject(value, where);
     return {
         run_id: asRunId(lastPassed.run_id, `${where}.run_id`),
-        ohrm_sha: asCommit(lastPassed.ohrm_sha, `${where}.ohrm_sha`),
-        test_sha: asCommit(lastPassed.test_sha, `${where}.test_sha`),
+        ohrm_sha: asNullableCommit(lastPassed, 'ohrm_sha', where),
+        test_sha: asString(lastPassed.test_sha, `${where}.test_sha`),
     };
 }
 
@@ -532,16 +573,20 @@ export function parseAnswer(value: unknown, source: string): Answer {
         const where = `${source}: groups[${index}]`;
         const group = asObject(raw, where);
         const verdict = asVerdict(group.verdict, `${where}.verdict`);
+        if (!('leaning' in group)) {
+            throw new Error(`${where}.leaning is missing; use null for none.`);
+        }
         const leaning = asLeaning(group.leaning, `${where}.leaning`);
-        if (leaning && verdict !== 'undetermined') {
+        const commit = asCommit(group.commit, `${where}.commit`);
+        if (commit && verdict === 'undetermined') {
             throw new Error(
-                `${where}: leaning is set, so verdict must be undetermined.`
+                `${where}: an undetermined group has no commit; its leaning holds one.`
             );
         }
         return {
             tests: asStrings(group.tests, `${where}.tests`),
             verdict,
-            commit: asCommit(group.commit, `${where}.commit`),
+            commit,
             confidence: asConfidence(group.confidence, `${where}.confidence`),
             leaning,
             last_passed: asLastPassed(

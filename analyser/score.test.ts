@@ -1,7 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,6 +165,75 @@ void describe('score: one fault', () => {
                     }),
                 ]),
             ]
+        ).faults;
+        assert.equal(result.found, true);
+    });
+});
+
+void describe('score: the confidence rule', () => {
+    void it('refuses a verdict below the threshold', () => {
+        const [result] = score(
+            [card()],
+            [answer([group({ confidence: 0.1 })])]
+        ).faults;
+        assert.equal(result.reason, 'breaks confidence rule');
+        assert.match(result.detail, /below 0\.7/);
+    });
+
+    void it('refuses a leaning at or above the threshold', () => {
+        const [result] = score(
+            [card()],
+            [
+                answer([
+                    group({
+                        verdict: 'undetermined',
+                        commit: null,
+                        confidence: 0.7,
+                        leaning: { verdict: 'code change', commit: SHA },
+                    }),
+                ]),
+            ]
+        ).faults;
+        assert.equal(result.reason, 'breaks confidence rule');
+        assert.match(result.detail, /has a leaning/);
+    });
+
+    void it('refuses a leaning beside a verdict', () => {
+        const [result] = score(
+            [card()],
+            [
+                answer([
+                    group({
+                        confidence: 0.95,
+                        leaning: { verdict: 'infra problem', commit: null },
+                    }),
+                ]),
+            ]
+        ).faults;
+        assert.equal(result.reason, 'breaks confidence rule');
+    });
+
+    void it('keeps an undetermined group with a leaning below the threshold', () => {
+        const [result] = score(
+            [card()],
+            [
+                answer([
+                    group({
+                        verdict: 'undetermined',
+                        commit: null,
+                        confidence: 0.69,
+                        leaning: { verdict: 'code change', commit: SHA },
+                    }),
+                ]),
+            ]
+        ).faults;
+        assert.equal(result.reason, 'undetermined');
+    });
+
+    void it('accepts a verdict exactly at the threshold', () => {
+        const [result] = score(
+            [card()],
+            [answer([group({ confidence: 0.7 })])]
         ).faults;
         assert.equal(result.found, true);
     });
@@ -387,10 +462,14 @@ void describe('parseCard and parseAnswer', () => {
         explanation: 'e',
         evidence: ['x'],
     };
-    const rawAnswer = (groupFields: Record<string, unknown>): unknown => ({
-        failing_build: 1001,
-        groups: [{ ...rawGroup, ...groupFields }],
-    });
+    // Through JSON, as from a file: a field set to undefined is left out.
+    const rawAnswer = (groupFields: Record<string, unknown>): unknown =>
+        JSON.parse(
+            JSON.stringify({
+                failing_build: 1001,
+                groups: [{ ...rawGroup, ...groupFields }],
+            })
+        );
 
     void it('reads an answer group without a commit', () => {
         const parsed = parseAnswer(rawAnswer({}), 'a.json');
@@ -435,17 +514,60 @@ void describe('parseCard and parseAnswer', () => {
         });
     });
 
-    void it('refuses a leaning on a group with a verdict', () => {
+    void it('refuses a group without the leaning key', () => {
+        assert.throws(
+            () => parseAnswer(rawAnswer({ leaning: undefined }), 'a.json'),
+            /leaning is missing/
+        );
+    });
+
+    void it('refuses a commit on an undetermined group', () => {
         assert.throws(
             () =>
                 parseAnswer(
                     rawAnswer({
-                        leaning: { verdict: 'code change', commit: SHA },
+                        verdict: 'undetermined',
+                        commit: SHA,
+                        confidence: 0.4,
                     }),
                     'a.json'
                 ),
-            /verdict must be undetermined/
+            /undetermined group has no commit/
         );
+    });
+
+    void it('refuses a last passing run without a test commit', () => {
+        assert.throws(
+            () =>
+                parseAnswer(
+                    rawAnswer({ last_passed: { run_id: 1000, ohrm_sha: SHA } }),
+                    'a.json'
+                ),
+            /last_passed\.test_sha is not a non-empty string/
+        );
+    });
+
+    void it('refuses a last passing run without the ohrm_sha key', () => {
+        assert.throws(
+            () =>
+                parseAnswer(
+                    rawAnswer({
+                        last_passed: { run_id: 1000, test_sha: SHA },
+                    }),
+                    'a.json'
+                ),
+            /last_passed\.ohrm_sha is missing/
+        );
+    });
+
+    void it('reads a last passing run whose app commit is unknown', () => {
+        const parsed = parseAnswer(
+            rawAnswer({
+                last_passed: { run_id: 1000, ohrm_sha: null, test_sha: SHA },
+            }),
+            'a.json'
+        );
+        assert.equal(parsed.groups[0].last_passed?.ohrm_sha, null);
     });
 
     void it('refuses an undetermined leaning', () => {
@@ -454,6 +576,7 @@ void describe('parseCard and parseAnswer', () => {
                 parseAnswer(
                     rawAnswer({
                         verdict: 'undetermined',
+                        confidence: 0.4,
                         leaning: { verdict: 'undetermined', commit: null },
                     }),
                     'a.json'
@@ -515,6 +638,7 @@ void describe('command line', () => {
         assert.equal(run.status, 0, run.stderr);
         assert.match(run.stdout, /Found: 1\./);
         assert.equal(readFileSync(output, 'utf8'), run.stdout);
+        rmSync(root, { recursive: true, force: true });
     });
 
     void it('exits 2 with a usage line when a folder is missing', () => {

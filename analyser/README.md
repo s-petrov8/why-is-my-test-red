@@ -26,7 +26,7 @@ Each build uploads one artifact per run, `evidence-run-N`, with:
 - `test-results/`: per failing test, its error context, screenshot, video and trace.
 - `app-logs/containers.log`: the app and database container logs, with timestamps.
 - `app-logs/orangehrm/`: OrangeHRM's own logs.
-- `app-logs/build-info.json`: which code ran, with `ohrm_repo`, `ohrm_ref`, `ohrm_sha`, `ohrm_version` and `test_sha`. A build from an image tag has empty `ohrm_repo`, `ohrm_ref` and `ohrm_sha`. When the file is missing, the run's log and `gh run view <id> --json headSha` give the same facts.
+- `app-logs/build-info.json`: which code ran, with `ohrm_repo`, `ohrm_ref`, `ohrm_sha`, `ohrm_version` and `test_sha`. A build from an image tag has empty `ohrm_repo`, `ohrm_ref` and `ohrm_sha`. When the file is missing, the run's log and `gh run view <id> --json headSha` give most of the same facts, but the comparison is weaker: the log records the app ref, which pins the commit only when it is a full sha.
 
 ## Test ids
 
@@ -80,10 +80,10 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 - `failing_build`: the run id of the build explained.
 - `groups`: every failing test of the failing build, each in exactly one group. A group holds the tests that failed for one cause.
 - `verdict`: `code change`, `test script problem`, `infra problem` or `undetermined`.
-- `commit`: for a code change, the app commit that broke the tests; for a test script problem caused by a test-repo commit, that commit; otherwise `null`.
-- `confidence`: how strongly the evidence supports the verdict, from 0 to 1. Below 0.7 the verdict is `undetermined`.
-- `leaning`: when the confidence is below 0.7, the verdict the evidence leaned towards, as `{ "verdict": "...", "commit": "<sha or null>" }`; otherwise `null`.
-- `last_passed`: the last earlier build where the group's tests passed, with its run id, app commit and test commit, or `null` when none was found within 30 runs. `ohrm_sha` is `null` when that build ran a released image and its exact commit isn't recorded. When the group's tests passed last in different builds, the newest of them, since the commit that broke them all came after it.
+- `commit`: for a code change, the app commit that broke the tests; for a test script problem caused by a test-repo commit, that commit; otherwise `null`, and always `null` when the verdict is `undetermined`.
+- `confidence`: how strongly the evidence supports the verdict, from 0 to 1. The threshold is 0.7: below it the verdict is `undetermined`, and at or above it `leaning` is `null`.
+- `leaning`: always present. When the confidence is below 0.7, the verdict the evidence leaned towards, as `{ "verdict": "...", "commit": "<sha or null>" }`, or `null` when it leaned nowhere; otherwise `null`.
+- `last_passed`: the last earlier build where the group's tests passed, as `{ "run_id", "ohrm_sha", "test_sha" }`, or `null` when none was found within 30 runs. `test_sha` is always set; `ohrm_sha` is `null` when that build ran a released image and its exact commit isn't recorded. When the group's tests passed last in different builds, it is the newest of them by creation time, since the commit that broke them all came after it. That holds only while the newer build also ran newer code: CI can run any branch or app ref, so when the builds' commits aren't in ancestor order, the evidence says so and the confidence is lower. Each test whose own last pass differs from `last_passed` gets an evidence line with its run and commits.
 - `flake`: `true` when the group's tests both pass and fail on the same code. It is a flag beside the verdict, not a verdict.
 - `explanation`: what went wrong, in plain words. For an intended app change the test didn't follow, it says to update the test if the change was intended.
 - `evidence`: concrete items, such as an error line, a log line with its timestamp, or a file and hunk from the diff.
@@ -93,7 +93,7 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 - **Code change**: a change to the application since the last passing build broke the test, including dependency updates. An intended change the test didn't follow, such as a renamed button, is a code change too.
 - **Test script problem**: the test itself is at fault, including a change to the test code and test data collisions.
 - **Infra problem**: something outside the code and the test broke it, such as the environment or a third-party service.
-- **Undetermined**: the evidence does not support any other verdict.
+- **Undetermined**: the evidence does not support any other verdict with a confidence of 0.7 or more.
 
 ## Answer card
 
@@ -129,9 +129,10 @@ A fault is **found** when one group holds exactly the card's failing tests, no m
 Otherwise the row gives the first reason that applies:
 
 - `no answer`: no answer has the card's failing build.
+- `tests split across groups`: the fault's tests are in more than one group, whether or not some are also in no group.
 - `tests missing`: some of the fault's tests are in no group.
-- `tests split across groups`: the fault's tests are in more than one group.
 - `extra tests in the group`: the group also holds a test from another cause.
+- `breaks confidence rule`: the group says a verdict other than `undetermined` at a confidence below 0.7, or has a `leaning` at 0.7 or above. Such a group is invalid, and the scorer's `CONFIDENCE_THRESHOLD` matches the skill's.
 - `undetermined`: the group's verdict is undetermined. It counts as not found, but apart from wrong answers.
 - `wrong verdict`: the group's verdict differs from the card's.
 - `wrong commit`: a code change group names no commit, or a different one.
@@ -148,4 +149,4 @@ Beside each fault the report prints the confidence of the groups holding its tes
 node analyser/score.ts <cards-dir> <answers-dir> [output.md]
 ```
 
-It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, such as a card with the flake in `failing_tests` or another test in `flake_tests`, a group without `confidence` from 0 to 1 or without `last_passed`, or a `leaning` on a group whose verdict isn't `undetermined`, or two answers for one build, stops it with exit code 2 and a message naming the file.
+It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, such as a card with the flake in `failing_tests` or another test in `flake_tests`, a group without `confidence` from 0 to 1, without the `leaning` key or without `last_passed`, a `last_passed` without `test_sha` or without the `ohrm_sha` key, or a `commit` on an `undetermined` group, or two answers for one build, stops it with exit code 2 and a message naming the file.

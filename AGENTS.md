@@ -89,7 +89,7 @@ Your harness loads skills from its native directory. Claude Code uses `.claude/s
 - `common-tasks`: a prompt template; the verification checklist.
 - `refactor-values`: changing an existing enum or static value.
 - `debugging`: a failing, flaky or slow test; a `ZodError`; CI-only red.
-- `failure-analyser`: explaining why a CI build failed, given its run id and the last passing one; never scaffold work.
+- `failure-analyser`: explaining why a CI build failed, given its run id; never scaffold work.
 - `pr-reviewer`: reviewing a named branch against the base.
 - `skill-creator`: creating or improving a skill.
 
