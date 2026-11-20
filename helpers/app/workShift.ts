@@ -7,7 +7,7 @@ import type { CreateWorkShiftRequest } from '../../fixtures/api/schemas/app/work
 /**
  * Creates a work shift and assigns employees to it.
  *
- * @param {ApiRequestFn} api - The API, signed in as an administrator.
+ * @param {ApiRequestFn} api - The API client, signed in as an administrator.
  * @param {CreateWorkShiftRequest} workShift - The shift.
  * @returns {Promise<number>} The id of the new shift.
  */
@@ -30,7 +30,7 @@ export async function createWorkShift(
 /**
  * Deletes a work shift.
  *
- * @param {ApiRequestFn} api - The API, signed in as an administrator.
+ * @param {ApiRequestFn} api - The API client, signed in as an administrator.
  * @param {number} id - The shift.
  * @returns {Promise<void>} Resolves once it is gone.
  */
