@@ -129,24 +129,26 @@ jq -r 'def specs($d): (.specs[]? | "tests/\(.file) > \(($d + [.title]) | join(" 
 
 This prints every test id with its outcome. The test passed when its outcome is `expected`. If `evidence-run-1` is missing, take another artifact from the listing. Artifacts expire after the workflow's retention period, and every run has the same one, so once a run's artifacts are all `expired`, every older run's are too: stop the walk there, and say in each affected group's evidence that the history ran out at the retention limit.
 
-**Only runs on the failing build's line of history count.** CI also builds other branches, of the app and of the test repo, such as other work on the fork, and a pass there says nothing about what changed on this line. Before you read a run's report, take its app and test commits from its `app-logs/build-info.json` (or as in step 2) and check that each is an ancestor of the failing build's:
+**Only runs on the failing build's line of history count.** A run counts when its app commit and its test commit are both ancestors of the failing build's. A branch merged into that line keeps its runs; unmerged work, such as another branch on the fork or a test-repo branch still under review, is skipped. Check the test commit first, before any download: a run's `headSha` in `history.tsv` is its `test_sha`. Then take the run's app commit from its `app-logs/build-info.json` (or as in step 2) and check that too:
 
 ```bash
-git clone --quiet --filter=blob:none --no-checkout "<ohrm_repo of the failing build>" repos/app
-git -C repos/app fetch --quiet origin <run ohrm_sha> <failing ohrm_sha>
-git -C repos/app merge-base --is-ancestor <run ohrm_sha> <failing ohrm_sha> && echo app-ok
 git -C repos/tests fetch --quiet origin <run test_sha> <failing test_sha>
 git -C repos/tests merge-base --is-ancestor <run test_sha> <failing test_sha> && echo tests-ok
+git clone --quiet --filter=blob:none --no-checkout "<failing app repo>" repos/app
+git -C repos/app fetch --quiet origin <run app commit> <failing app commit>
+git -C repos/app merge-base --is-ancestor <run app commit> <failing app commit> && echo app-ok
 ```
 
-Clone `repos/app` once and reuse it. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. For a run on the released image, use the commit of the matching tag, as in step 2. A commit that still doesn't resolve fails the check. Skip a run that fails either check, for every test, and keep walking; it still counts towards the 30.
+Clone `repos/app` once and reuse it. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. A build on the released image, the failing one or an earlier one, has no `ohrm_repo` or `ohrm_sha`: its app repo is upstream, `https://github.com/orangehrm/orangehrm`, and its app commit is the release tag's, `git -C repos/app rev-parse "v<ohrm_version>^{commit}"`. The clone carries the tags. Use the tag, never a branch of the same name, such as `5.9`, which moves. A fork keeps upstream's tags; if one is missing, fetch it from an `upstream` remote.
+
+A run fails the check when a commit doesn't resolve, or when its app ref is a branch or tag name with no pinned commit (a run without `build-info.json`, as in step 2): a name resolves to its tip today, not to what that run built. Skip a run that fails either check, for every test, and keep walking; it still counts towards the 30.
 
 For each still-open test, write down per counted run whether it passed, failed (with the first line of its error), was skipped, or was absent from the report. A run with no report says nothing about the test.
 
-For each test's last passing run, record the run id, its app commit (`ohrm_sha`) and its test commit (`test_sha`), from that run's `app-logs/build-info.json` or, when it has none, as in step 2. If a test didn't pass in any run the walk reached, its group says so and `last_passed` is `null`. What that means depends on what the runs showed:
+For each test's last passing run, record the run id, its app commit (`ohrm_sha`) and its test commit (`test_sha`), from that run's `app-logs/build-info.json` or, when it has none, as in step 2. `ohrm_sha` stays `null` for a run on the released image, but keep the tag's commit from the check for step 6. If a test didn't pass in any counted run, its group says so and `last_passed` is `null`. What that means depends on what the runs showed:
 
-- **Absent from every earlier report**: the test is new. Find the test-repo commit that added it, with `git -C repos/tests log --format='%H %s' -S '<test title>' -- <spec path>`, and read that commit: a new test that fails on its first run usually points at the test or at what it assumes about the app.
-- **Failed the same way in every earlier report**: the failure predates the window, so the recent commits didn't cause it. Weigh it by its own evidence, such as the error, the logs and the test code, not by the commits.
+- **Absent from every counted report**: the test is new. Find the test-repo commit that added it, with `git -C repos/tests log --format='%H %s' -S '<test title>' -- <spec path>`, and read that commit: a new test that fails on its first run usually points at the test or at what it assumes about the app.
+- **Failed the same way in every counted report**: the failure predates the window, so the recent commits didn't cause it. Weigh it by its own evidence, such as the error, the logs and the test code, not by the commits.
 - **Otherwise**, for example skipped or with no report: the verdict is normally `undetermined`.
 
 When the last passing run has the same app and test commits as the failing build, the code didn't change. The cause is a flake, test data or infra, not a commit.
@@ -156,16 +158,14 @@ When the last passing run has the same app and test commits as the failing build
 For each distinct last passing run, compare its app and test commits with the failing build's:
 
 ```bash
-git -C repos/app fetch --quiet origin <last passing ohrm_sha> <failing ohrm_sha>
-git -C repos/app log --oneline --stat --left-right <last passing ohrm_sha>...<failing ohrm_sha>
-git -C repos/app diff <last passing ohrm_sha> <failing ohrm_sha>
+git -C repos/app log --oneline --stat <last passing app commit>..<failing app commit>
+git -C repos/app diff <last passing app commit> <failing app commit>
 
-git -C repos/tests fetch --quiet origin <last passing test_sha> <failing test_sha>
-git -C repos/tests log --oneline --stat --left-right <last passing test_sha>...<failing test_sha>
+git -C repos/tests log --oneline --stat <last passing test_sha>..<failing test_sha>
 git -C repos/tests diff <last passing test_sha> <failing test_sha>
 ```
 
-The `--left-right` log marks commits only on the earlier side with `<` and those only on the failing side with `>`. Only `>` commits can have broken a test that passed on the earlier side. Step 5 counts only runs whose commits are ancestors of the failing build's, so the `<` side is empty.
+The app commits are those from step 5, with the tag's commit for a released image; a comparison with a released image is weaker, since the image may differ from its tag, so say so and lower the confidence. Step 5 counts only runs whose commits are ancestors of the failing build's, so each log lists exactly the commits the failing build added since the test last passed.
 
 Read every commit's diff in full, not only its message: messages can be misleading and a small change can hide among ordinary ones. Note what each commit changes in behaviour, such as a comparison, a condition, a default, a validation, a status code, a label or a response field.
 
