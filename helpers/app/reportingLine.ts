@@ -2,7 +2,7 @@ import { APIRequestContext, expect } from '@playwright/test';
 import { ApiEndpoints, ReportingMethodIds } from '../../enums/app/app';
 
 /**
- * Puts one employee in another's reporting line, making the second their
+ * Puts one employee in another's reporting line and makes the second their
  * approver.
  *
  * @param {APIRequestContext} context - An authenticated request context.
