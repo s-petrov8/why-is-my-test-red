@@ -119,11 +119,13 @@ For each group, trace the chain from cause to symptom: the commit or event, the 
 
 ### 7. Decide the verdict
 
-Check in this order and stop at the first that the evidence supports:
+The evidence decides, not how many tests failed. Many tests failing at once is not by itself evidence for any verdict: it shows only that they share something, a code path or an environment, so look for both. Check in this order and stop at the first that the evidence supports:
 
-1. **Infra problem**: the app or the database was unreachable, crashed, restarted or ran out of resources; the runner or a step outside the tests failed; requests time out with nothing in the app logs; the same failure hits unrelated tests at the same moment.
-2. **Code change**: an app commit between the builds changes the behaviour the test checks, and that change explains the received value. Name that commit. When the change looks deliberate, say to update the test if it was intended.
-3. **Test script problem**: a test-repo commit between the builds changed the test, its page object, fixture, factory or data in a way that explains the failure; or the failure comes from test data, such as generated values that clash with other records, records left over from another test, or an order the test assumes but the app does not promise.
+1. **A commit on the failing path**: look first for an app or test-repo commit between the two builds that touches code the failing tests run through. Shared code counts, such as sign-in, sessions, setup and seed steps, a common validator, or a helper or fixture many tests use: one commit there can explain failures across unrelated tests.
+    - **Code change**: an app commit changes the behaviour the tests check, and that change explains the received value. Name that commit. When the change looks deliberate, say to update the test if it was intended.
+    - **Test script problem**: a test-repo commit changed the test, its page object, fixture, helper, factory or data in a way that explains the failure. Name that commit.
+2. **Infra problem**: only with positive evidence from outside the code, such as container restarts, database connection errors, out-of-memory errors, DNS or network errors, a workflow step outside the tests failing, or a timeout with no application error, and only when no commit explains the failures better.
+3. **Test script problem from test data**: no commit and no infra event explains it, and the failure comes from test data, such as generated values that clash with other records, records left over from another test, or an order the test assumes but the app does not promise.
 4. **Undetermined**: none of the above is supported. Say what you checked and what is missing.
 
 Set `flake: true` when a test both passed and failed on the same app and test code: it failed in the passing build's code too, or failed in some runs of a build and passed in others. To check, you may read earlier runs of the workflow (`gh run list -R "$TEST_REPO" --workflow orangehrm-suite.yml`, then `gh run view` and `gh run download` into `evidence/history/<id>/`) and look for the same test failing with the same error on app code that lacks the commits under suspicion. Note those run ids in the evidence.
