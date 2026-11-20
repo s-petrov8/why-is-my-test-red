@@ -97,7 +97,7 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 
 ## Analyser reasoning
 
-Beside `answer.json`, the analyser writes `reasoning.md`, in plain words and no more than about 40 lines. Under one heading per group, it lists each candidate cause it considered, such as a commit, an infra event or the test data, with one or two lines on what pointed to it and what ruled it in or out. It is for a person checking the verdicts; the scorer doesn't read it.
+Beside `answer.json`, the analyser writes `reasoning.md`, in plain words and 40 lines at most. It has one heading per group, in the order of `groups`, with the group's verdict and commit. Under each heading come the commits, app or test repo, that touch code the failing tests run through, one summary line with the counts of the other commits in each compared range, then the infra events found or none, then the test data. Each item says in one or two lines what pointed to that cause and whether it was ruled in, ruled out or, below the 0.7 threshold, the group's leaning, with the missing link. It is for a person checking the verdicts; the scorer doesn't read it.
 
 ## Answer card
 

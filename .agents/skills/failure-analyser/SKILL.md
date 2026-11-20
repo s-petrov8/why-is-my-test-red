@@ -224,17 +224,26 @@ Check before you finish: valid JSON (`jq . answer.json`), every failing test of 
 
 ### 10. Write `reasoning.md`
 
-Next to `answer.json`, write `reasoning.md` for a developer who wants to check the verdicts. Give one short heading per group, and under it one item per candidate cause you considered: each commit in the compared range, each infra event, and the test data. Each item is one or two plain lines: what pointed to that cause, and what ruled it in or out.
+Next to `answer.json`, write `reasoning.md` for a developer who wants to check the verdicts. Give each group a heading, in the order of `groups`: its number, a few words on the symptom, its verdict and, when set, the short sha of its commit. Under the heading, give one item per candidate cause, each one or two plain lines: what pointed to it, and what ruled it in or out.
+
+- **Commits**: one item per `>` commit, app or test repo, that touches code the failing tests run through, by the test in step 8. Each compared range then gets one summary line for its other commits, with their counts. When groups share a range, give its summary under the first of them and refer back to it.
+- **Infra**: one item, naming the events found, or saying none were.
+- **Test data**: one item.
+
+Each item ends with its outcome: `Ruled in.` for the cause behind the group's verdict and commit, `Ruled out.`, or, below `CONFIDENCE_THRESHOLD`, `Leaning, not ruled in:` and the missing link, for the cause in the group's `leaning`. An `undetermined` group has no `Ruled in.` item.
 
 ```markdown
-## Leave request create returns 422
+## 1. Leave request create returns 422: code change, `<short sha>`
 
 - App `<short sha>`: changes the date check the endpoint calls, and the new check rejects a one-day request, which matches the 422. Ruled in.
-- App `<short sha>`: changes only admin menu labels, which no failing test uses. Ruled out.
+- Test `<short sha>`: changes the leave request factory, but it builds the same dates as in the last passing run. Ruled out.
+- Range `<short sha>...<short sha>`: 5 other app commits and 2 other test commits touch nothing on the failing path. Ruled out.
 - Infra: no container restart or database error in `containers.log` during the test. Ruled out.
-- Test data: the factory builds the same kind of dates as in the last passing run. Ruled out.
+- Test data: no record from another test or run clashes with the request. Ruled out.
 ```
 
-Keep the whole file to about 40 lines. Name each source in a few words and leave the quotes to the `evidence` in `answer.json`. A group whose verdict is `undetermined` says what was missing to rule a cause in.
+Keep the whole file to 40 lines at most. Name each source in a few words and leave the quotes to the `evidence` in `answer.json`.
+
+Check before you finish: one heading per group, in the order of `groups`; each `Ruled in.` item matches its group's `verdict` and `commit`, and each `Leaning, not ruled in:` item its group's `leaning`; 40 lines at most (`wc -l reasoning.md`).
 
 End with a short summary in chat: one line per group with its verdict, its confidence, its commit and the strongest piece of evidence.
