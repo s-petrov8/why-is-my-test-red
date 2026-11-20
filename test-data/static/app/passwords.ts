@@ -6,7 +6,7 @@
 
 /** The longest password the policy allows. */
 export const LONGEST_VALID_PASSWORD =
-    'Vq7#mZt2Lp9xRw4KsY8nBc3HdJ6fGu1TeA5oQi0WlXv7MrN2zPy9CbS4kDj8hUf!';
+    'Vq7#mZt2Lp9xRw4KsY8nBc3HdJ6fGu1TeA5oQi0WlXv7MrN2zPy9CbS4kDj8hUf!a';
 
 export const INVALID_PASSWORDS = [
     {
