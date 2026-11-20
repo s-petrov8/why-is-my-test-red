@@ -32,6 +32,7 @@ function card(overrides: Partial<Card> = {}): Card {
         commit: SHA,
         failing_build: { run_id: BUILD },
         failing_tests: [A1, A2],
+        flake_tests: [],
         ...overrides,
     };
 }
@@ -80,7 +81,7 @@ void describe('score: one fault', () => {
 
     void it('counts the flake mixed into the fault group as extra tests', () => {
         const [result] = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group({ tests: [A1, A2, FLAKE] })])]
         ).faults;
         assert.equal(result.reason, 'extra tests in the group');
@@ -142,9 +143,9 @@ void describe('score: one fault', () => {
         assert.equal(result.found, true);
     });
 
-    void it('ignores the flake in the card when comparing the fault tests', () => {
+    void it('finds the fault beside the flake in its own group', () => {
         const [result] = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [
                 answer([
                     group(),
@@ -193,7 +194,7 @@ void describe('score: the known flake', () => {
 
     void it('accepts the flake as its own group with test script problem', () => {
         const result = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group(), flakeGroup])]
         );
         assert.equal(result.flakes.length, 1);
@@ -203,7 +204,7 @@ void describe('score: the known flake', () => {
 
     void it('reports the flake with a wrong verdict', () => {
         const [flake] = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group(), { ...flakeGroup, verdict: 'infra problem' }])]
         ).flakes;
         assert.equal(flake.reason, 'wrong verdict');
@@ -211,7 +212,7 @@ void describe('score: the known flake', () => {
 
     void it('reports the flake sharing a group with the fault', () => {
         const [flake] = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group({ tests: [A1, A2, FLAKE] })])]
         ).flakes;
         assert.equal(flake.reason, 'extra tests in the group');
@@ -219,21 +220,29 @@ void describe('score: the known flake', () => {
 
     void it('reports the flake missing when the card lists it and no group does', () => {
         const [flake] = score(
-            [card({ failing_tests: [A1, A2, FLAKE] })],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group()])]
         ).flakes;
         assert.equal(flake.reason, 'tests missing');
     });
 
-    void it('has no flake row when the build did not fail the flake', () => {
+    void it('has no flake row when the card lists no flake test', () => {
         assert.equal(score([card()], [answer([group()])]).flakes.length, 0);
+    });
+
+    void it('reads the flake from the card, not from the answer', () => {
+        const result = score([card()], [answer([group(), flakeGroup])]);
+        assert.equal(result.flakes.length, 0);
+        assert.deepEqual(result.unexpectedTests, [
+            { failingBuild: BUILD, test: FLAKE },
+        ]);
     });
 });
 
 void describe('score: tests no card explains', () => {
-    void it('lists an answered test that is in no card and is not the flake', () => {
+    void it('lists an answered test that is in no card and is not a flake test of the card', () => {
         const result = score(
-            [card()],
+            [card({ flake_tests: [FLAKE] })],
             [answer([group(), group({ tests: [OTHER, FLAKE] })])]
         );
         assert.deepEqual(result.unexpectedTests, [
@@ -285,6 +294,7 @@ void describe('parseCard and parseAnswer', () => {
         passing_build: { run_id: 1000, ohrm_ref: 'x' },
         failing_build: { run_id: 1001, ohrm_ref: 'y' },
         failing_tests: [A1],
+        flake_tests: [FLAKE],
         what: 'w',
         file: 'f',
     };
@@ -300,10 +310,34 @@ void describe('parseCard and parseAnswer', () => {
         );
     });
 
-    void it('refuses a card whose only failing test is the flake', () => {
+    void it('reads the flake tests of a card', () => {
+        assert.deepEqual(parseCard(rawCard, 'c.json').flake_tests, [FLAKE]);
+        assert.deepEqual(
+            parseCard({ ...rawCard, flake_tests: [] }, 'c.json').flake_tests,
+            []
+        );
+    });
+
+    void it('refuses the flake in failing_tests', () => {
         assert.throws(
-            () => parseCard({ ...rawCard, failing_tests: [FLAKE] }, 'c.json'),
-            /only the known flake/
+            () =>
+                parseCard({ ...rawCard, failing_tests: [A1, FLAKE] }, 'c.json'),
+            /belongs in flake_tests/
+        );
+    });
+
+    void it('refuses a test other than the flake in flake_tests', () => {
+        assert.throws(
+            () => parseCard({ ...rawCard, flake_tests: [A2] }, 'c.json'),
+            /not the known flake/
+        );
+    });
+
+    void it('refuses a card without flake_tests', () => {
+        const { flake_tests: _omitted, ...withoutFlakes } = rawCard;
+        assert.throws(
+            () => parseCard(withoutFlakes, 'c.json'),
+            /flake_tests is not a list/
         );
     });
 
@@ -355,6 +389,7 @@ void describe('command line', () => {
                 commit: SHA,
                 failing_build: { run_id: 1001 },
                 failing_tests: [A1],
+                flake_tests: [],
             })
         );
         writeFileSync(

@@ -103,6 +103,7 @@ One JSON file per fault, written by the mutator and kept off GitHub:
     "passing_build": { "run_id": 0, "ohrm_ref": "<sha>" },
     "failing_build": { "run_id": 0, "ohrm_ref": "<sha>" },
     "failing_tests": ["<test id>"],
+    "flake_tests": [],
     "what": "<what was changed, in one sentence>",
     "file": "<path of the changed file>"
 }
@@ -111,7 +112,8 @@ One JSON file per fault, written by the mutator and kept off GitHub:
 - `kind`: what was planted, such as `app_bug`, `test_bug` or `infra`.
 - `verdict`: the right verdict for the fault.
 - `commit`: the commit that holds the fault. `null` for an infra problem.
-- `failing_tests`: the ids of the tests the fault turns red, as `failing-tests.ts` prints them. If the known flake failed in the same build, it is listed too, and the scorer scores it on its own row.
+- `failing_tests`: the ids of the tests the fault turns red, as `failing-tests.ts` prints them. Never the known flake.
+- `flake_tests`: the ids of the known-flake tests that failed in the same build, as `failing-tests.ts` prints them. An empty list when none failed.
 
 ## Scoring
 
@@ -129,9 +131,9 @@ Otherwise the row gives the first reason that applies:
 - `wrong verdict`: the group's verdict differs from the card's.
 - `wrong commit`: a code change group names no commit, or a different one.
 
-**The known flake** is the `AND semantics` test in `tests/app/api/employeeSearch.spec.ts`. When it is among a build's failures, in the card or in the answer, it must be its own group with verdict `test script problem`. The report shows that row with the same reasons, but it is not a fault and is not counted in the totals. It is never part of a fault's tests, so a fault group that also holds it has extra tests.
+**The known flake** is the `AND semantics` test in `tests/app/api/employeeSearch.spec.ts`. When a card lists it in `flake_tests`, it failed in that build and must be its own group with verdict `test script problem`. The report shows that row with the same reasons, but it is not a fault and is not counted in the totals. It is never one of a fault's tests, so a fault group that also holds it has extra tests.
 
-The report also lists every answered test that is in no card and isn't the flake, and every answer whose build has no card.
+The report also lists every answered test that is in neither `failing_tests` nor `flake_tests` of the build's cards, the flake included when no card says it failed, and every answer whose build has no card.
 
 Totals: faults, found, wrong, undetermined and no answer.
 
@@ -139,4 +141,4 @@ Totals: faults, found, wrong, undetermined and no answer.
 node analyser/score.ts <cards-dir> <answers-dir> [output.md]
 ```
 
-It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, or two answers for one build, stops it with exit code 2 and a message naming the file.
+It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, such as a card with the flake in `failing_tests` or another test in `flake_tests`, or two answers for one build, stops it with exit code 2 and a message naming the file.

@@ -31,6 +31,7 @@ export interface Card {
     commit: string | null;
     failing_build: { run_id: string };
     failing_tests: string[];
+    flake_tests: string[];
 }
 
 export interface Group {
@@ -216,7 +217,7 @@ export function score(cards: Card[], answers: Answer[]): Score {
             failingBuild: card.failing_build.run_id,
             ...judge(
                 {
-                    tests: card.failing_tests.filter((t) => !isFlake(t)),
+                    tests: card.failing_tests,
                     verdict: card.verdict,
                     commit: card.commit,
                 },
@@ -234,10 +235,8 @@ export function score(cards: Card[], answers: Answer[]): Score {
         const buildCards = cardsByBuild.get(build) ?? [];
         const answer = answerByBuild.get(build);
         const answeredTests = (answer?.groups ?? []).flatMap((g) => g.tests);
-        const cardTests = buildCards.flatMap((c) => c.failing_tests);
-
         const flakeTests = [
-            ...new Set([...cardTests, ...answeredTests].filter(isFlake)),
+            ...new Set(buildCards.flatMap((c) => c.flake_tests)),
         ];
         if (flakeTests.length > 0) {
             flakes.push({
@@ -249,9 +248,11 @@ export function score(cards: Card[], answers: Answer[]): Score {
             });
         }
 
-        const explained = new Set(cardTests);
+        const explained = new Set(
+            buildCards.flatMap((c) => [...c.failing_tests, ...c.flake_tests])
+        );
         for (const test of new Set(answeredTests)) {
-            if (!explained.has(test) && !isFlake(test)) {
+            if (!explained.has(test)) {
                 unexpectedTests.push({ failingBuild: build, test });
             }
         }
@@ -367,6 +368,16 @@ function asStrings(value: unknown, where: string): string[] {
     return value as string[];
 }
 
+function asStringList(value: unknown, where: string): string[] {
+    if (
+        !Array.isArray(value) ||
+        !value.every((v) => typeof v === 'string' && v !== '')
+    ) {
+        throw new Error(`${where} is not a list of strings.`);
+    }
+    return value as string[];
+}
+
 function asVerdict(value: unknown, where: string): Verdict {
     const verdict = VERDICTS.find((v) => v === value);
     if (!verdict) {
@@ -397,9 +408,16 @@ export function parseCard(value: unknown, source: string): Card {
         json.failing_tests,
         `${source}: failing_tests`
     );
-    if (failingTests.every(isFlake)) {
+    if (failingTests.some(isFlake)) {
         throw new Error(
-            `${source}: failing_tests holds only the known flake, so the card has no fault to score.`
+            `${source}: failing_tests holds the known flake, which belongs in flake_tests.`
+        );
+    }
+    const flakeTests = asStringList(json.flake_tests, `${source}: flake_tests`);
+    const notFlake = flakeTests.find((t) => !isFlake(t));
+    if (notFlake) {
+        throw new Error(
+            `${source}: flake_tests holds ${notFlake}, which is not the known flake.`
         );
     }
     const failingBuild = asObject(
@@ -417,6 +435,7 @@ export function parseCard(value: unknown, source: string): Card {
             ),
         },
         failing_tests: failingTests,
+        flake_tests: flakeTests,
     };
 }
 
