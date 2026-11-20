@@ -8,8 +8,11 @@ on:
                 description: OrangeHRM image tag
                 default: '5.9'
             ohrm_ref:
-                description: Upstream commit or tag to build from source, replacing the image tag
+                description: Commit or tag of ohrm_repo to build from source, replacing the image tag
                 default: ''
+            ohrm_repo:
+                description: Git clone URL of the OrangeHRM repository that ohrm_ref is built from
+                default: https://github.com/orangehrm/orangehrm.git
             runs:
                 description: Number of independent runs, each on a fresh instance
                 default: '1'
@@ -105,9 +108,29 @@ jobs:
               if: ${{ inputs.ohrm_ref != '' }}
               env:
                   OHRM_REF: ${{ inputs.ohrm_ref }}
+                  OHRM_REPO: ${{ inputs.ohrm_repo }}
               run: |
-                  infra/build-orangehrm-from-ref.sh "$OHRM_REF" orangehrm-source:local
+                  infra/build-orangehrm-from-ref.sh "$OHRM_REF" orangehrm-source:local "$OHRM_REPO"
                   echo "OHRM_IMAGE=orangehrm-source:local" >> "$GITHUB_ENV"
+                  sha="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' orangehrm-source:local)"
+                  echo "OHRM_SHA=$sha" >> "$GITHUB_ENV"
+
+            # The run API does not expose dispatch inputs, so this file is the record of which app ran.
+            - name: Record build info
+              if: ${{ !cancelled() }}
+              env:
+                  OHRM_REPO: ${{ inputs.ohrm_ref != '' && inputs.ohrm_repo || '' }}
+                  OHRM_REF: ${{ inputs.ohrm_ref }}
+              run: |
+                  mkdir -p app-logs
+                  jq -n \
+                      --arg ohrm_repo "$OHRM_REPO" \
+                      --arg ohrm_ref "$OHRM_REF" \
+                      --arg ohrm_sha "${OHRM_SHA:-}" \
+                      --arg ohrm_version "$OHRM_VERSION" \
+                      --arg test_sha "$GITHUB_SHA" \
+                      '$ARGS.named' > app-logs/build-info.json
+                  cat app-logs/build-info.json
 
             - name: Start OrangeHRM
               run: infra/start-orangehrm.sh
