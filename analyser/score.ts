@@ -34,10 +34,24 @@ export interface Card {
     flake_tests: string[];
 }
 
+export interface Leaning {
+    verdict: Verdict;
+    commit: string | null;
+}
+
+export interface LastPassed {
+    run_id: string;
+    ohrm_sha: string | null;
+    test_sha: string | null;
+}
+
 export interface Group {
     tests: string[];
     verdict: Verdict;
     commit: string | null;
+    confidence: number;
+    leaning: Leaning | null;
+    last_passed: LastPassed | null;
 }
 
 export interface Answer {
@@ -63,6 +77,8 @@ export interface Judgement {
 export interface FaultResult extends Judgement {
     faultId: string;
     failingBuild: string;
+    /** The answer groups that hold any of the fault's tests. */
+    groups: Group[];
 }
 
 export interface FlakeResult extends Judgement {
@@ -125,6 +141,16 @@ function listSample(tests: string[]): string {
     return tests.length > 2 ? `${shown}; and ${tests.length - 2} more` : shown;
 }
 
+function touchingGroups(
+    tests: string[],
+    answer: Answer | undefined
+): { group: Group; number: number }[] {
+    const wanted = new Set(tests);
+    return (answer?.groups ?? [])
+        .map((group, index) => ({ group, number: index + 1 }))
+        .filter(({ group }) => group.tests.some((t) => wanted.has(t)));
+}
+
 function judge(expected: Expectation, answer: Answer | undefined): Judgement {
     const miss = (reason: Reason, detail: string): Judgement => ({
         found: false,
@@ -134,9 +160,7 @@ function judge(expected: Expectation, answer: Answer | undefined): Judgement {
     if (!answer) return miss('no answer', 'no answer for this build');
 
     const wanted = new Set(expected.tests);
-    const touching = answer.groups
-        .map((group, index) => ({ group, number: index + 1 }))
-        .filter(({ group }) => group.tests.some((t) => wanted.has(t)));
+    const touching = touchingGroups(expected.tests, answer);
 
     if (touching.length === 0) {
         return miss(
@@ -215,6 +239,10 @@ export function score(cards: Card[], answers: Answer[]): Score {
         .map((card) => ({
             faultId: card.fault_id,
             failingBuild: card.failing_build.run_id,
+            groups: touchingGroups(
+                card.failing_tests,
+                answerByBuild.get(card.failing_build.run_id)
+            ).map(({ group }) => group),
             ...judge(
                 {
                     tests: card.failing_tests,
@@ -264,6 +292,24 @@ export function score(cards: Card[], answers: Answer[]): Score {
     return { faults, flakes, unexpectedTests, answersWithoutCard };
 }
 
+function confidenceCell(groups: Group[]): string {
+    return groups.map((g) => String(g.confidence)).join(', ');
+}
+
+function leaningCell(groups: Group[]): string {
+    return groups
+        .flatMap((g) =>
+            g.leaning
+                ? [
+                      g.leaning.commit
+                          ? `${g.leaning.verdict} ${g.leaning.commit.slice(0, MIN_COMMIT_PREFIX)}`
+                          : g.leaning.verdict,
+                  ]
+                : []
+        )
+        .join(', ');
+}
+
 function cell(text: string): string {
     return text.replaceAll('|', '\\|').replaceAll('\n', ' ');
 }
@@ -287,11 +333,11 @@ export function renderReport(result: Score): string {
         '',
         `Faults: ${faults.length}. Found: ${found}. Wrong: ${wrong}. Undetermined: ${undetermined}. No answer: ${noAnswer}.`,
         '',
-        '| Fault | Failing build | Result | Reason | Detail |',
-        '| --- | --- | --- | --- | --- |',
+        '| Fault | Failing build | Result | Reason | Confidence | Leaning | Detail |',
+        '| --- | --- | --- | --- | --- | --- | --- |',
         ...faults.map(
             (f) =>
-                `| ${cell(f.faultId)} | ${f.failingBuild} | ${f.found ? 'found' : 'not found'} | ${f.reason ?? ''} | ${cell(f.detail)} |`
+                `| ${cell(f.faultId)} | ${f.failingBuild} | ${f.found ? 'found' : 'not found'} | ${f.reason ?? ''} | ${confidenceCell(f.groups)} | ${cell(leaningCell(f.groups))} | ${cell(f.detail)} |`
         ),
     ];
 
@@ -391,6 +437,38 @@ function asCommit(value: unknown, where: string): string | null {
     return asString(value, where);
 }
 
+function asConfidence(value: unknown, where: string): number {
+    if (
+        typeof value !== 'number' ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        value > 1
+    ) {
+        throw new Error(`${where} is not a number from 0 to 1.`);
+    }
+    return value;
+}
+
+function asLeaning(value: unknown, where: string): Leaning | null {
+    if (value === undefined || value === null) return null;
+    const leaning = asObject(value, where);
+    const verdict = asVerdict(leaning.verdict, `${where}.verdict`);
+    if (verdict === 'undetermined') {
+        throw new Error(`${where}.verdict cannot be undetermined.`);
+    }
+    return { verdict, commit: asCommit(leaning.commit, `${where}.commit`) };
+}
+
+function asLastPassed(value: unknown, where: string): LastPassed | null {
+    if (value === null) return null;
+    const lastPassed = asObject(value, where);
+    return {
+        run_id: asRunId(lastPassed.run_id, `${where}.run_id`),
+        ohrm_sha: asCommit(lastPassed.ohrm_sha, `${where}.ohrm_sha`),
+        test_sha: asCommit(lastPassed.test_sha, `${where}.test_sha`),
+    };
+}
+
 /**
  * Reads the fields the scorer uses from a parsed answer card.
  * @param value - the parsed JSON
@@ -453,10 +531,23 @@ export function parseAnswer(value: unknown, source: string): Answer {
     const groups = json.groups.map((raw: unknown, index: number): Group => {
         const where = `${source}: groups[${index}]`;
         const group = asObject(raw, where);
+        const verdict = asVerdict(group.verdict, `${where}.verdict`);
+        const leaning = asLeaning(group.leaning, `${where}.leaning`);
+        if (leaning && verdict !== 'undetermined') {
+            throw new Error(
+                `${where}: leaning is set, so verdict must be undetermined.`
+            );
+        }
         return {
             tests: asStrings(group.tests, `${where}.tests`),
-            verdict: asVerdict(group.verdict, `${where}.verdict`),
+            verdict,
             commit: asCommit(group.commit, `${where}.commit`),
+            confidence: asConfidence(group.confidence, `${where}.confidence`),
+            leaning,
+            last_passed: asLastPassed(
+                group.last_passed,
+                `${where}.last_passed`
+            ),
         };
     });
     return {

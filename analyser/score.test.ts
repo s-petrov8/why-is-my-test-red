@@ -42,6 +42,9 @@ function group(overrides: Partial<Group> = {}): Group {
         tests: [A1, A2],
         verdict: 'code change',
         commit: SHA.slice(0, 7),
+        confidence: 0.9,
+        leaning: null,
+        last_passed: { run_id: '1000', ohrm_sha: SHA, test_sha: SHA },
         ...overrides,
     };
 }
@@ -281,7 +284,32 @@ void describe('renderReport', () => {
             report,
             /Faults: 4\. Found: 1\. Wrong: 1\. Undetermined: 1\. No answer: 1\./
         );
-        assert.match(report, /\| f02 \| 2 \| not found \| wrong verdict \|/);
+        assert.match(
+            report,
+            /\| f02 \| 2 \| not found \| wrong verdict \| 0\.9 \| {2}\|/
+        );
+    });
+
+    void it('prints the confidence and the leaning beside a fault', () => {
+        const report = renderReport(
+            score(
+                [card()],
+                [
+                    answer([
+                        group({
+                            verdict: 'undetermined',
+                            commit: null,
+                            confidence: 0.55,
+                            leaning: { verdict: 'code change', commit: SHA },
+                        }),
+                    ]),
+                ]
+            )
+        );
+        assert.match(
+            report,
+            /\| f01 \| 1001 \| not found \| undetermined \| 0\.55 \| code change 0123456 \|/
+        );
     });
 });
 
@@ -348,24 +376,90 @@ void describe('parseCard and parseAnswer', () => {
         );
     });
 
+    const rawGroup = {
+        tests: [A1],
+        verdict: 'infra problem',
+        commit: null,
+        confidence: 0.8,
+        leaning: null,
+        last_passed: { run_id: 1000, ohrm_sha: SHA, test_sha: SHA },
+        flake: false,
+        explanation: 'e',
+        evidence: ['x'],
+    };
+    const rawAnswer = (groupFields: Record<string, unknown>): unknown => ({
+        failing_build: 1001,
+        groups: [{ ...rawGroup, ...groupFields }],
+    });
+
     void it('reads an answer group without a commit', () => {
+        const parsed = parseAnswer(rawAnswer({}), 'a.json');
+        assert.equal(parsed.groups[0].commit, null);
+        assert.equal(parsed.groups[0].confidence, 0.8);
+        assert.equal(parsed.groups[0].last_passed?.run_id, '1000');
+    });
+
+    void it('reads a group with no last passing run', () => {
+        const parsed = parseAnswer(rawAnswer({ last_passed: null }), 'a.json');
+        assert.equal(parsed.groups[0].last_passed, null);
+    });
+
+    void it('refuses a group without last_passed', () => {
+        assert.throws(
+            () => parseAnswer(rawAnswer({ last_passed: undefined }), 'a.json'),
+            /last_passed is not an object/
+        );
+    });
+
+    void it('refuses a confidence outside 0 to 1 or missing', () => {
+        for (const confidence of [-0.1, 1.5, '0.8', undefined]) {
+            assert.throws(
+                () => parseAnswer(rawAnswer({ confidence }), 'a.json'),
+                /confidence is not a number from 0 to 1/
+            );
+        }
+    });
+
+    void it('reads a leaning on an undetermined group', () => {
         const parsed = parseAnswer(
-            {
-                failing_build: 1001,
-                passing_build: 1000,
-                groups: [
-                    {
-                        tests: [A1],
-                        verdict: 'infra problem',
-                        flake: false,
-                        explanation: 'e',
-                        evidence: ['x'],
-                    },
-                ],
-            },
+            rawAnswer({
+                verdict: 'undetermined',
+                confidence: 0.4,
+                leaning: { verdict: 'code change', commit: SHA },
+            }),
             'a.json'
         );
-        assert.equal(parsed.groups[0].commit, null);
+        assert.deepEqual(parsed.groups[0].leaning, {
+            verdict: 'code change',
+            commit: SHA,
+        });
+    });
+
+    void it('refuses a leaning on a group with a verdict', () => {
+        assert.throws(
+            () =>
+                parseAnswer(
+                    rawAnswer({
+                        leaning: { verdict: 'code change', commit: SHA },
+                    }),
+                    'a.json'
+                ),
+            /verdict must be undetermined/
+        );
+    });
+
+    void it('refuses an undetermined leaning', () => {
+        assert.throws(
+            () =>
+                parseAnswer(
+                    rawAnswer({
+                        verdict: 'undetermined',
+                        leaning: { verdict: 'undetermined', commit: null },
+                    }),
+                    'a.json'
+                ),
+            /leaning\.verdict cannot be undetermined/
+        );
     });
 });
 
@@ -396,8 +490,20 @@ void describe('command line', () => {
             path.join(answersDir, '1001.json'),
             JSON.stringify({
                 failing_build: 1001,
-                passing_build: 1000,
-                groups: [{ tests: [A1], verdict: 'code change', commit: SHA }],
+                groups: [
+                    {
+                        tests: [A1],
+                        verdict: 'code change',
+                        commit: SHA,
+                        confidence: 0.9,
+                        leaning: null,
+                        last_passed: {
+                            run_id: 1000,
+                            ohrm_sha: SHA,
+                            test_sha: SHA,
+                        },
+                    },
+                ],
             })
         );
         const output = path.join(root, 'score.md');

@@ -2,7 +2,7 @@
 
 The analyser explains why a CI build's tests failed. It sorts the failing tests into groups by cause, gives each group a verdict and backs the verdict with evidence from the build.
 
-It only reads. It never reruns tests, starts builds, pushes or changes anything. It works from what the builds left behind and from the commits between them.
+It only reads. It never reruns tests, starts builds, pushes or changes anything. It works from what the builds left behind, the CI history and the commits between builds.
 
 An evaluation loop checks it. A mutator plants a fault in the app among harmless commits, CI runs the suite on the last passing app commit and on the faulty one, and the mutator writes an answer card. A fresh analyser explains the failing build, and the scorer in this folder compares its answer with the card.
 
@@ -15,13 +15,9 @@ An evaluation loop checks it. A mutator plants a fault in the app among harmless
 
 ## Inputs
 
-The analyser gets three things:
+The analyser gets one thing: the failing build's run id. The test repo is always `s-petrov8/why-is-my-test-red`, and every build is a run of its `orangehrm-suite.yml` workflow.
 
-- the failing build's run id,
-- the last passing build's run id,
-- the URL of the app repo the builds ran, such as `https://github.com/s-petrov8/orangehrm`.
-
-The test repo is always `s-petrov8/why-is-my-test-red`, and both builds are runs of its `orangehrm-suite.yml` workflow.
+It reads the app repo URL and the app commit from the failing build's `app-logs/build-info.json`. For each failing test it finds the last earlier build where that test passed, by walking up to 30 earlier runs of the workflow, newest first, and compares the code of the two builds. Different tests can have different last passing builds.
 
 Each build uploads one artifact per run, `evidence-run-N`, with:
 
@@ -61,12 +57,18 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 ```json
 {
     "failing_build": 0,
-    "passing_build": 0,
     "groups": [
         {
             "tests": ["<test id>"],
             "verdict": "code change",
             "commit": "<sha>",
+            "confidence": 0.9,
+            "leaning": null,
+            "last_passed": {
+                "run_id": 0,
+                "ohrm_sha": "<sha>",
+                "test_sha": "<sha>"
+            },
             "flake": false,
             "explanation": "<two or three plain sentences>",
             "evidence": ["<one concrete item from the logs, report or diff>"]
@@ -75,10 +77,13 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 }
 ```
 
-- `failing_build`, `passing_build`: the two run ids.
+- `failing_build`: the run id of the build explained.
 - `groups`: every failing test of the failing build, each in exactly one group. A group holds the tests that failed for one cause.
 - `verdict`: `code change`, `test script problem`, `infra problem` or `undetermined`.
 - `commit`: for a code change, the app commit that broke the tests; for a test script problem caused by a test-repo commit, that commit; otherwise `null`.
+- `confidence`: how strongly the evidence supports the verdict, from 0 to 1. Below 0.7 the verdict is `undetermined`.
+- `leaning`: when the confidence is below 0.7, the verdict the evidence leaned towards, as `{ "verdict": "...", "commit": "<sha or null>" }`; otherwise `null`.
+- `last_passed`: the last earlier build where the group's tests passed, with its run id, app commit and test commit, or `null` when none was found within 30 runs. `ohrm_sha` is `null` when that build ran a released image and its exact commit isn't recorded. When the group's tests passed last in different builds, the newest of them, since the commit that broke them all came after it.
 - `flake`: `true` when the group's tests both pass and fail on the same code. It is a flag beside the verdict, not a verdict.
 - `explanation`: what went wrong, in plain words. For an intended app change the test didn't follow, it says to update the test if the change was intended.
 - `evidence`: concrete items, such as an error line, a log line with its timestamp, or a file and hunk from the diff.
@@ -137,8 +142,10 @@ The report also lists every answered test that is in neither `failing_tests` nor
 
 Totals: faults, found, wrong, undetermined and no answer.
 
+Beside each fault the report prints the confidence of the groups holding its tests and, when set, their leaning. Neither changes the score: only the tests, the verdict and the commit decide it.
+
 ```bash
 node analyser/score.ts <cards-dir> <answers-dir> [output.md]
 ```
 
-It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, such as a card with the flake in `failing_tests` or another test in `flake_tests`, or two answers for one build, stops it with exit code 2 and a message naming the file.
+It reads every `*.json` file in the two folders, prints the markdown report and, given a third argument, also writes it to that file. A malformed card or answer, such as a card with the flake in `failing_tests` or another test in `flake_tests`, a group without `confidence` from 0 to 1 or without `last_passed`, or a `leaning` on a group whose verdict isn't `undetermined`, or two answers for one build, stops it with exit code 2 and a message naming the file.
