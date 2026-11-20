@@ -11,7 +11,7 @@ on:
                 description: Commit or tag of ohrm_repo to build from source, replacing the image tag
                 default: ''
             ohrm_repo:
-                description: Git clone URL of the OrangeHRM repository that ohrm_ref is built from
+                description: Public https://github.com/<owner>/<repository> clone URL that ohrm_ref is built from; unused without ohrm_ref
                 default: https://github.com/orangehrm/orangehrm.git
             runs:
                 description: Number of independent runs, each on a fresh instance
@@ -112,28 +112,43 @@ jobs:
               run: |
                   infra/build-orangehrm-from-ref.sh "$OHRM_REF" orangehrm-source:local "$OHRM_REPO"
                   echo "OHRM_IMAGE=orangehrm-source:local" >> "$GITHUB_ENV"
-                  sha="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' orangehrm-source:local)"
-                  echo "OHRM_SHA=$sha" >> "$GITHUB_ENV"
-
-            # The run API does not expose dispatch inputs, so this file is the record of which app ran.
-            - name: Record build info
-              if: ${{ !cancelled() }}
-              env:
-                  OHRM_REPO: ${{ inputs.ohrm_ref != '' && inputs.ohrm_repo || '' }}
-                  OHRM_REF: ${{ inputs.ohrm_ref }}
-              run: |
-                  mkdir -p app-logs
-                  jq -n \
-                      --arg ohrm_repo "$OHRM_REPO" \
-                      --arg ohrm_ref "$OHRM_REF" \
-                      --arg ohrm_sha "${OHRM_SHA:-}" \
-                      --arg ohrm_version "$OHRM_VERSION" \
-                      --arg test_sha "$GITHUB_SHA" \
-                      '$ARGS.named' > app-logs/build-info.json
-                  cat app-logs/build-info.json
+                  label() { docker image inspect --format "{{ index .Config.Labels \"org.opencontainers.image.$1\" }}" orangehrm-source:local; }
+                  echo "OHRM_SOURCE_REPO=$(label source)" >> "$GITHUB_ENV"
+                  echo "OHRM_SHA=$(label revision)" >> "$GITHUB_ENV"
 
             - name: Start OrangeHRM
               run: infra/start-orangehrm.sh
+
+            # The run API does not expose dispatch inputs, so this file is the record of which app ran.
+            # It runs after the start, so the app container's image is pulled and can be inspected.
+            # A source build records its repository and commit; the image path records the tag
+            # input and the pulled image's digest.
+            - name: Record build info
+              if: ${{ !cancelled() }}
+              env:
+                  REQUESTED_REPO: ${{ inputs.ohrm_ref != '' && inputs.ohrm_repo || '' }}
+                  REQUESTED_REF: ${{ inputs.ohrm_ref }}
+                  REQUESTED_VERSION: ${{ inputs.ohrm_ref == '' && inputs.ohrm_version || '' }}
+              run: |
+                  image=""
+                  image_digest=""
+                  container="$(docker compose -f infra/docker-compose.yml ps --all --quiet app 2>/dev/null || true)"
+                  if [[ -n "$container" ]]; then
+                      image="$(docker inspect --format '{{ .Config.Image }}' "$container")"
+                      image_id="$(docker inspect --format '{{ .Image }}' "$container")"
+                      image_digest="$(docker image inspect --format '{{ join .RepoDigests " " }}' "$image_id")"
+                  fi
+                  mkdir -p app-logs
+                  jq -n \
+                      --arg ohrm_repo "${OHRM_SOURCE_REPO:-$REQUESTED_REPO}" \
+                      --arg ohrm_ref "$REQUESTED_REF" \
+                      --arg ohrm_sha "${OHRM_SHA:-}" \
+                      --arg ohrm_version "$REQUESTED_VERSION" \
+                      --arg ohrm_image "$image" \
+                      --arg ohrm_image_digest "$image_digest" \
+                      --arg test_sha "$GITHUB_SHA" \
+                      '$ARGS.named' > app-logs/build-info.json
+                  cat app-logs/build-info.json
 
             - name: Run Playwright tests
               run: npx playwright test --reporter=list,json,html
