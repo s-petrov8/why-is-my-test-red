@@ -1,6 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type Report, failingTestIds, testId } from './failing-tests.ts';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+    type Report,
+    failingTestIds,
+    parseReport,
+    testId,
+} from './failing-tests.ts';
 
 const ROOT = '/home/runner/work/repo/repo';
 
@@ -134,5 +144,82 @@ void describe('failingTestIds', () => {
 
     void it('refuses a report without the config paths', () => {
         assert.throws(() => failingTestIds({ suites: [] }), /rootDir/);
+    });
+});
+
+void describe('parseReport', () => {
+    const raw = {
+        config: {
+            rootDir: `${ROOT}/tests`,
+            configFile: `${ROOT}/playwright.config.ts`,
+            workers: 1,
+        },
+        suites: [
+            {
+                title: 'e.spec.ts',
+                file: 'e.spec.ts',
+                specs: [
+                    {
+                        title: 'fails',
+                        file: 'e.spec.ts',
+                        line: 3,
+                        tests: [
+                            {
+                                status: 'unexpected',
+                                projectName: 'chromium',
+                                results: [{ status: 'failed', duration: 5 }],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+        errors: [],
+        stats: { expected: 0 },
+    };
+
+    void it('reads the fields the lister needs and drops the rest', () => {
+        const report = parseReport(raw);
+        assert.deepEqual(failingTestIds(report), ['tests/e.spec.ts > fails']);
+        assert.equal('stats' in report, false);
+    });
+
+    void it('names the field when a spec has no title', () => {
+        const broken = structuredClone(raw);
+        const [spec] = broken.suites[0].specs;
+        assert.throws(
+            () =>
+                parseReport({
+                    ...broken,
+                    suites: [
+                        {
+                            ...broken.suites[0],
+                            specs: [{ ...spec, title: undefined }],
+                        },
+                    ],
+                }),
+            /report\.suites\[0\]\.specs\[0\]\.title is not a string/
+        );
+    });
+
+    void it('refuses a report that is not an object', () => {
+        assert.throws(() => parseReport([]), /report is not an object/);
+    });
+
+    void it('makes the command exit 2 with the reason on a malformed report', () => {
+        const file = path.join(
+            mkdtempSync(path.join(tmpdir(), 'failing-tests-')),
+            'results.json'
+        );
+        writeFileSync(file, JSON.stringify({ suites: 'none' }));
+        const script = path.join(
+            path.dirname(fileURLToPath(import.meta.url)),
+            'failing-tests.ts'
+        );
+        const run = spawnSync(process.execPath, [script, file], {
+            encoding: 'utf8',
+        });
+        assert.equal(run.status, 2);
+        assert.match(run.stderr, /report\.suites is not a list/);
     });
 });

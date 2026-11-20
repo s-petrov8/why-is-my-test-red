@@ -106,6 +106,96 @@ function toPosix(p: string): string {
     return p.replaceAll('\\', '/');
 }
 
+type Json = Record<string, unknown>;
+
+function asObject(value: unknown, where: string): Json {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error(`${where} is not an object.`);
+    }
+    return value as Json;
+}
+
+function asList(value: unknown, where: string): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) throw new Error(`${where} is not a list.`);
+    return value;
+}
+
+function asText(value: unknown, where: string): string {
+    if (typeof value !== 'string') throw new Error(`${where} is not a string.`);
+    return value;
+}
+
+function asOptionalText(value: unknown, where: string): string | undefined {
+    return value === undefined ? undefined : asText(value, where);
+}
+
+function parseTest(value: unknown, where: string): ReportTest {
+    const test = asObject(value, where);
+    return {
+        status: asOptionalText(test.status, `${where}.status`),
+        results: asList(test.results, `${where}.results`).map(
+            (result, i): ReportResult => ({
+                status: asOptionalText(
+                    asObject(result, `${where}.results[${i}]`).status,
+                    `${where}.results[${i}].status`
+                ),
+            })
+        ),
+    };
+}
+
+function parseSpec(value: unknown, where: string): ReportSpec {
+    const spec = asObject(value, where);
+    return {
+        title: asText(spec.title, `${where}.title`),
+        file: asText(spec.file, `${where}.file`),
+        tests: asList(spec.tests, `${where}.tests`).map((test, i) =>
+            parseTest(test, `${where}.tests[${i}]`)
+        ),
+    };
+}
+
+function parseSuite(value: unknown, where: string): ReportSuite {
+    const suite = asObject(value, where);
+    return {
+        title: asText(suite.title, `${where}.title`),
+        specs: asList(suite.specs, `${where}.specs`).map((spec, i) =>
+            parseSpec(spec, `${where}.specs[${i}]`)
+        ),
+        suites: asList(suite.suites, `${where}.suites`).map((child, i) =>
+            parseSuite(child, `${where}.suites[${i}]`)
+        ),
+    };
+}
+
+/**
+ * Reads the fields the lister uses from a parsed Playwright JSON report,
+ * checking each one, and leaves every other field out.
+ * @param value - the parsed JSON
+ * @returns the report
+ */
+export function parseReport(value: unknown): Report {
+    const report = asObject(value, 'report');
+    const config =
+        report.config === undefined
+            ? undefined
+            : asObject(report.config, 'report.config');
+    return {
+        config: config && {
+            rootDir: asOptionalText(config.rootDir, 'report.config.rootDir'),
+            configFile: asOptionalText(
+                config.configFile,
+                'report.config.configFile'
+            ),
+        },
+        suites: asList(report.suites, 'report.suites').map((suite, i) =>
+            parseSuite(suite, `report.suites[${i}]`)
+        ),
+        errors: asList(report.errors, 'report.errors'),
+    };
+}
+
 function main(argv: string[]): number {
     const [reportPath] = argv;
     if (!reportPath) {
@@ -114,8 +204,18 @@ function main(argv: string[]): number {
         );
         return 2;
     }
-    const report = JSON.parse(readFileSync(reportPath, 'utf8')) as Report;
-    const ids = failingTestIds(report);
+    let report: Report;
+    let ids: string[];
+    try {
+        const raw: unknown = JSON.parse(readFileSync(reportPath, 'utf8'));
+        report = parseReport(raw);
+        ids = failingTestIds(report);
+    } catch (error) {
+        process.stderr.write(
+            `${reportPath}: ${error instanceof Error ? error.message : String(error)}\n`
+        );
+        return 2;
+    }
     if (ids.length > 0) process.stdout.write(`${ids.join('\n')}\n`);
     const globalErrors = report.errors?.length ?? 0;
     if (globalErrors > 0) {
