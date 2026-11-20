@@ -129,7 +129,19 @@ jq -r 'def specs($d): (.specs[]? | "tests/\(.file) > \(($d + [.title]) | join(" 
 
 This prints every test id with its outcome. The test passed when its outcome is `expected`. If `evidence-run-1` is missing, take another artifact from the listing. Artifacts expire after the workflow's retention period, and every run has the same one, so once a run's artifacts are all `expired`, every older run's are too: stop the walk there, and say in each affected group's evidence that the history ran out at the retention limit.
 
-For each still-open test, write down per run whether it passed, failed (with the first line of its error), was skipped, or was absent from the report. A run with no report says nothing about the test.
+**Only runs on the failing build's line of history count.** CI also builds other branches, of the app and of the test repo, such as other work on the fork, and a pass there says nothing about what changed on this line. Before you read a run's report, take its app and test commits from its `app-logs/build-info.json` (or as in step 2) and check that each is an ancestor of the failing build's:
+
+```bash
+git clone --quiet --filter=blob:none --no-checkout "<ohrm_repo of the failing build>" repos/app
+git -C repos/app fetch --quiet origin <run ohrm_sha> <failing ohrm_sha>
+git -C repos/app merge-base --is-ancestor <run ohrm_sha> <failing ohrm_sha> && echo app-ok
+git -C repos/tests fetch --quiet origin <run test_sha> <failing test_sha>
+git -C repos/tests merge-base --is-ancestor <run test_sha> <failing test_sha> && echo tests-ok
+```
+
+Clone `repos/app` once and reuse it. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. For a run on the released image, use the commit of the matching tag, as in step 2. A commit that still doesn't resolve fails the check. Skip a run that fails either check, for every test, and keep walking; it still counts towards the 30.
+
+For each still-open test, write down per counted run whether it passed, failed (with the first line of its error), was skipped, or was absent from the report. A run with no report says nothing about the test.
 
 For each test's last passing run, record the run id, its app commit (`ohrm_sha`) and its test commit (`test_sha`), from that run's `app-logs/build-info.json` or, when it has none, as in step 2. If a test didn't pass in any run the walk reached, its group says so and `last_passed` is `null`. What that means depends on what the runs showed:
 
@@ -144,7 +156,6 @@ When the last passing run has the same app and test commits as the failing build
 For each distinct last passing run, compare its app and test commits with the failing build's:
 
 ```bash
-git clone --quiet --filter=blob:none --no-checkout "<ohrm_repo of the failing build>" repos/app
 git -C repos/app fetch --quiet origin <last passing ohrm_sha> <failing ohrm_sha>
 git -C repos/app log --oneline --stat --left-right <last passing ohrm_sha>...<failing ohrm_sha>
 git -C repos/app diff <last passing ohrm_sha> <failing ohrm_sha>
@@ -154,9 +165,7 @@ git -C repos/tests log --oneline --stat --left-right <last passing test_sha>...<
 git -C repos/tests diff <last passing test_sha> <failing test_sha>
 ```
 
-The `--left-right` log marks commits only on the earlier side with `<` and those only on the failing side with `>`. Earlier runs can come from any branch, so an earlier commit isn't always an ancestor of the failing one; `git merge-base --is-ancestor <earlier> <failing>` tells. Only `>` commits can have broken a test that passed on the earlier side.
-
-If a commit doesn't resolve because the earlier build used another app repo, add that repo as a second remote in the same clone and fetch from it. A commit that still doesn't resolve, app or test, such as one on a deleted branch, makes the comparison weaker: say so and lower the confidence.
+The `--left-right` log marks commits only on the earlier side with `<` and those only on the failing side with `>`. Only `>` commits can have broken a test that passed on the earlier side. Step 5 counts only runs whose commits are ancestors of the failing build's, so the `<` side is empty.
 
 Read every commit's diff in full, not only its message: messages can be misleading and a small change can hide among ordinary ones. Note what each commit changes in behaviour, such as a comparison, a condition, a default, a validation, a status code, a label or a response field.
 
