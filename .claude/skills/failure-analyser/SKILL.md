@@ -1,11 +1,11 @@
 ---
 name: failure-analyser
-description: Use only when asked to explain why a CI build of the OrangeHRM suite failed, given the failing build's run id; it reads that build's evidence, finds where each failing test last passed in the CI history, compares the code and writes answer.json with verdicts. Never for writing, fixing, reviewing or debugging tests, page objects, fixtures or any other scaffold work in this repo (see `debugging` and `ai-native-workflow`).
+description: Use only when asked to explain why a CI build of the OrangeHRM suite failed, given the failing build's run id; it reads that build's evidence, finds where each failing test last passed in the CI history, compares the code and writes answer.json with verdicts and a short reasoning.md. Never for writing, fixing, reviewing or debugging tests, page objects, fixtures or any other scaffold work in this repo (see `debugging` and `ai-native-workflow`).
 ---
 
 # Failure analyser
 
-Explain why the tests of one CI build failed. Sort the failing tests into groups by cause, give each group a verdict with a confidence, and back it with concrete evidence from the build, from the earlier builds where the tests last passed, and from the commits in between. The result is `answer.json` in the working folder.
+Explain why the tests of one CI build failed. Sort the failing tests into groups by cause, give each group a verdict with a confidence, and back it with concrete evidence from the build, from the earlier builds where the tests last passed, and from the commits in between. The result is `answer.json` in the working folder, with a short `reasoning.md` beside it that says which causes were weighed and why each was ruled in or out.
 
 ## Inputs
 
@@ -221,5 +221,20 @@ Set `flake: true` when a test both passed and failed on the same app and test co
 - `evidence` lists concrete items, each with its source: a file and line, a log line with its timestamp, a commit and the changed line, a run id. Say when a comparison is weaker, such as a run with no `build-info.json` or an unresolvable commit. Give one line, `run <id>: <test> passed on app <sha>, test <sha>`, for each test whose own last pass differs from `last_passed`.
 
 Check before you finish: valid JSON (`jq . answer.json`), every failing test of the failing build in exactly one group, every id copied exactly from the lister, verdicts spelt exactly as above, and `confidence` consistent with `verdict` and `leaning`.
+
+### 10. Write `reasoning.md`
+
+Next to `answer.json`, write `reasoning.md` for a developer who wants to check the verdicts. Give one short heading per group, and under it one item per candidate cause you considered: each commit in the compared range, each infra event, and the test data. Each item is one or two plain lines: what pointed to that cause, and what ruled it in or out.
+
+```markdown
+## Leave request create returns 422
+
+- App `<short sha>`: changes the date check the endpoint calls, and the new check rejects a one-day request, which matches the 422. Ruled in.
+- App `<short sha>`: changes only admin menu labels, which no failing test uses. Ruled out.
+- Infra: no container restart or database error in `containers.log` during the test. Ruled out.
+- Test data: the factory builds the same kind of dates as in the last passing run. Ruled out.
+```
+
+Keep the whole file to about 40 lines. Name each source in a few words and leave the quotes to the `evidence` in `answer.json`. A group whose verdict is `undetermined` says what was missing to rule a cause in.
 
 End with a short summary in chat: one line per group with its verdict, its confidence, its commit and the strongest piece of evidence.
