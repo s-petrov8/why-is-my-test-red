@@ -1,11 +1,11 @@
 ---
 name: failure-analyser
-description: Use only when asked to explain why a CI build of the OrangeHRM suite failed, given the failing build's run id; it reads that build's evidence, finds where each failing test last passed in the CI history, compares the code and writes answer.json with verdicts. Never for writing, fixing, reviewing or debugging tests, page objects, fixtures or any other scaffold work in this repo (see `debugging` and `ai-native-workflow`).
+description: Use only when asked to explain why a CI build of the OrangeHRM suite failed, given the failing build's run id; it reads that build's evidence, finds where each failing test last passed in the CI history, compares the code and writes answer.json with verdicts and a short reasoning.md. Never for writing, fixing, reviewing or debugging tests, page objects, fixtures or any other scaffold work in this repo (see `debugging` and `ai-native-workflow`).
 ---
 
 # Failure analyser
 
-Explain why the tests of one CI build failed. Sort the failing tests into groups by cause, give each group a verdict with a confidence, and back it with concrete evidence from the build, from the earlier builds where the tests last passed, and from the commits in between. The result is `answer.json` in the working folder.
+Explain why the tests of one CI build failed. Sort the failing tests into groups by cause, give each group a verdict with a confidence, and back it with concrete evidence from the build, from the earlier builds where the tests last passed, and from the commits in between. The result is `answer.json` in the working folder, with a short `reasoning.md` beside it that says which causes were weighed and why each was ruled in or out.
 
 ## Inputs
 
@@ -221,5 +221,29 @@ Set `flake: true` when a test both passed and failed on the same app and test co
 - `evidence` lists concrete items, each with its source: a file and line, a log line with its timestamp, a commit and the changed line, a run id. Say when a comparison is weaker, such as a run with no `build-info.json` or an unresolvable commit. Give one line, `run <id>: <test> passed on app <sha>, test <sha>`, for each test whose own last pass differs from `last_passed`.
 
 Check before you finish: valid JSON (`jq . answer.json`), every failing test of the failing build in exactly one group, every id copied exactly from the lister, verdicts spelt exactly as above, and `confidence` consistent with `verdict` and `leaning`.
+
+### 10. Write `reasoning.md`
+
+Next to `answer.json`, write `reasoning.md` for a developer who wants to check the verdicts. Give each group a heading, in the order of `groups`: its number, a few words on the symptom, its verdict and, when set, the short sha of its commit. Under the heading, give one item per candidate cause, each one or two plain lines: what pointed to it, and what ruled it in or out.
+
+- **Commits**: one item per `>` commit, app or test repo, that touches code the failing tests run through, by the test in step 8. Each compared range then gets one summary line for its other commits, with their counts. When groups share a range, give its summary under the first of them and refer back to it.
+- **Infra**: one item, naming the events found, or saying none were.
+- **Test data**: one item.
+
+Each item ends with its outcome: `Ruled in.` for the cause behind the group's verdict and commit, `Ruled out.`, or, below `CONFIDENCE_THRESHOLD`, `Leaning, not ruled in:` and the missing link, for the cause in the group's `leaning`. An `undetermined` group has no `Ruled in.` item.
+
+```markdown
+## 1. Leave request create returns 422: code change, `<short sha>`
+
+- App `<short sha>`: changes the date check the endpoint calls, and the new check rejects a one-day request, which matches the 422. Ruled in.
+- Test `<short sha>`: changes the leave request factory, but it builds the same dates as in the last passing run. Ruled out.
+- Range `<short sha>...<short sha>`: 5 other app commits and 2 other test commits touch nothing on the failing path. Ruled out.
+- Infra: no container restart or database error in `containers.log` during the test. Ruled out.
+- Test data: no record from another test or run clashes with the request. Ruled out.
+```
+
+Keep the whole file to 40 lines at most. Name each source in a few words and leave the quotes to the `evidence` in `answer.json`.
+
+Check before you finish: one heading per group, in the order of `groups`; each `Ruled in.` item matches its group's `verdict` and `commit`, and each `Leaning, not ruled in:` item its group's `leaning`; 40 lines at most (`wc -l reasoning.md`).
 
 End with a short summary in chat: one line per group with its verdict, its confidence, its commit and the strongest piece of evidence.

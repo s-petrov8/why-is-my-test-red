@@ -95,6 +95,10 @@ One JSON file per failing build, `answer.json` in the analyser's working folder:
 - **Infra problem**: something outside the code and the test broke it, such as the environment or a third-party service.
 - **Undetermined**: the evidence does not support any other verdict with a confidence of 0.7 or more.
 
+## Analyser reasoning
+
+Beside `answer.json`, the analyser writes `reasoning.md`, in plain words and 40 lines at most. It has one heading per group, in the order of `groups`, with the group's verdict and commit. Under each heading come the commits, app or test repo, that touch code the failing tests run through, one summary line with the counts of the other commits in each compared range, then the infra events found or none, then the test data. Each item says in one or two lines what pointed to that cause and whether it was ruled in, ruled out or, below the 0.7 threshold, the group's leaning, with the missing link. It is for a person checking the verdicts; the scorer doesn't read it.
+
 ## Answer card
 
 One JSON file per fault, written by the mutator and kept off GitHub:
