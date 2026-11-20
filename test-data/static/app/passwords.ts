@@ -1,5 +1,5 @@
 /**
- * Fixed passwords for the password policy test. Strength depends on the exact value,
+ * Fixed passwords for the password policy checks. Strength depends on the exact value,
  * so these aren't generated. Each invalid value breaks one rule and the password
  * check names only that rule; `rule` is its key in `PasswordRules`.
  */
