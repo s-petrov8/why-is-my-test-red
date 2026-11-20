@@ -39,7 +39,7 @@ Every group gets a `confidence` from 0 to 1: how strongly the evidence supports 
 - **Enough (0.7 to 0.9)**: the chain is complete, but one link is inferred rather than seen, for example the changed line explains the symptom but the trace doesn't show the received value, or the comparison is weaker because the earlier build recorded only an image tag.
 - **Low (below 0.7)**: a link is missing. A commit touches the same area but doesn't explain the received value, two causes fit about equally, no earlier passing build was found, or the logs and traces needed to check the chain are missing.
 
-Below `CONFIDENCE_THRESHOLD`, `verdict` is `undetermined` and `commit` is `null`, and `leaning` holds the verdict the evidence leaned towards, with its commit if it has one. `leaning` is `null` only when no verdict is favoured at all. At or above `CONFIDENCE_THRESHOLD`, `leaning` is `null`.
+Below `CONFIDENCE_THRESHOLD`, `verdict` is `undetermined` and `commit` is `null`, and `leaning` holds the verdict the evidence leaned towards, with its commit if it has one. `leaning` is `null` only when no verdict is favoured at all. At or above `CONFIDENCE_THRESHOLD`, `leaning` is `null`. The scorer uses the same threshold and counts a group that breaks this rule as wrong.
 
 ## Steps
 
@@ -66,7 +66,7 @@ When a build has no `build-info.json`, take `test_sha` from its `headSha`, and t
 gh run view <run id> -R "$TEST_REPO" --log | grep -E 'OHRM_(REF|REPO|VERSION):|Cloning |Resolved ' | sort -u
 ```
 
-No `OHRM_REF` in the log means the build ran the released image for `OHRM_VERSION`. Its exact app commit isn't recorded, so take the matching tag and mark every comparison with that build as weaker in the evidence.
+No `OHRM_REF` in the log means the build ran the released image for `OHRM_VERSION`: take the matching tag. An `OHRM_REF` that is a tag or a branch names what was built but doesn't pin the commit. A comparison with a build that has no `build-info.json` is always weaker, unless its `OHRM_REF` is a full 40-character sha; say so in the evidence and lower the confidence.
 
 ### 3. List the failures
 
@@ -107,28 +107,35 @@ Then read the application logs around each failure, from its `startTime` to `sta
 
 ### 5. Find earlier CI runs where those tests were successful
 
-For each failing test, walk the earlier runs of the workflow, newest first, and stop at the first run where that test passed. Only runs created before the failing run count, and look at no more than 30 of them.
+For each failing test, walk the earlier runs of the workflow, newest first by creation time, and stop at the first run where that test passed. Only runs created before the failing run count, and look at no more than 30 of them. GitHub filters on the creation time, so this lists exactly those runs, however old the failing run is:
 
 ```bash
 CREATED=$(jq -r .createdAt run-failing.json)
-gh run list -R "$TEST_REPO" --workflow orangehrm-suite.yml --status completed --limit 100 \
+gh run list -R "$TEST_REPO" --workflow orangehrm-suite.yml --status completed \
+    --created "<$CREATED" --limit 30 \
     --json databaseId,createdAt,conclusion,headSha \
-    --jq "[.[] | select(.createdAt < \"$CREATED\")] | sort_by(.createdAt) | reverse | .[:30][]
-          | [.databaseId, .createdAt, .conclusion, .headSha] | @tsv" > history.tsv
+    --jq 'sort_by(.createdAt) | reverse | .[] | [.databaseId, .createdAt, .conclusion, .headSha] | @tsv' > history.tsv
 ```
 
-A run's conclusion doesn't matter: a failed run still shows which tests passed. Keep it cheap. For each run in `history.tsv`, in order, and only while some failing test has no last pass yet, download one artifact and read its report:
+A run's conclusion doesn't matter: a failed run still shows which tests passed. Keep it cheap. For each run in `history.tsv`, in order, and only while some failing test has no last pass yet, check its artifacts, then download one and read its report:
 
 ```bash
+gh api -X GET "repos/$TEST_REPO/actions/runs/<run id>/artifacts" --jq '.artifacts[] | [.name, .expired] | @tsv'
 gh run download <run id> -R "$TEST_REPO" -n evidence-run-1 -D evidence/history/<run id>
 jq -r 'def specs($d): (.specs[]? | "tests/\(.file) > \(($d + [.title]) | join(" > "))\t\([.tests[].status] | unique | join(","))"),
          (.suites[]? | specs($d + [.title | select(. != "")]));
        .suites[] | specs([])' evidence/history/<run id>/json-report/results.json
 ```
 
-This prints every test id with its outcome. The test passed when its outcome is `expected`. A test missing from the report, skipped, or in a run with no report doesn't count as passed there. If `evidence-run-1` is missing, list the run's artifacts with `gh api -X GET repos/$TEST_REPO/actions/runs/<run id>/artifacts --jq '.artifacts[].name'` and take another one.
+This prints every test id with its outcome. The test passed when its outcome is `expected`. If `evidence-run-1` is missing, take another artifact from the listing. Artifacts expire after the workflow's retention period, and every run has the same one, so once a run's artifacts are all `expired`, every older run's are too: stop the walk there, and say in each affected group's evidence that the history ran out at the retention limit.
 
-For each test's last passing run, record the run id, its app commit (`ohrm_sha`) and its test commit (`test_sha`), from that run's `app-logs/build-info.json` or, when it has none, as in step 2. If a test didn't pass in any of the 30 runs, write that down. Its group says so, `last_passed` is `null`, and its verdict is normally `undetermined`.
+For each still-open test, write down per run whether it passed, failed (with the first line of its error), was skipped, or was absent from the report. A run with no report says nothing about the test.
+
+For each test's last passing run, record the run id, its app commit (`ohrm_sha`) and its test commit (`test_sha`), from that run's `app-logs/build-info.json` or, when it has none, as in step 2. If a test didn't pass in any run the walk reached, its group says so and `last_passed` is `null`. What that means depends on what the runs showed:
+
+- **Absent from every earlier report**: the test is new. Find the test-repo commit that added it, with `git -C repos/tests log --format='%H %s' -S '<test title>' -- <spec path>`, and read that commit: a new test that fails on its first run usually points at the test or at what it assumes about the app.
+- **Failed the same way in every earlier report**: the failure predates the window, so the recent commits didn't cause it. Weigh it by its own evidence, such as the error, the logs and the test code, not by the commits.
+- **Otherwise**, for example skipped or with no report: the verdict is normally `undetermined`.
 
 When the last passing run has the same app and test commits as the failing build, the code didn't change. The cause is a flake, test data or infra, not a commit.
 
@@ -139,15 +146,17 @@ For each distinct last passing run, compare its app and test commits with the fa
 ```bash
 git clone --quiet --filter=blob:none --no-checkout "<ohrm_repo of the failing build>" repos/app
 git -C repos/app fetch --quiet origin <last passing ohrm_sha> <failing ohrm_sha>
-git -C repos/app log --oneline --stat <last passing ohrm_sha>..<failing ohrm_sha>
+git -C repos/app log --oneline --stat --left-right <last passing ohrm_sha>...<failing ohrm_sha>
 git -C repos/app diff <last passing ohrm_sha> <failing ohrm_sha>
 
 git -C repos/tests fetch --quiet origin <last passing test_sha> <failing test_sha>
-git -C repos/tests log --oneline --stat <last passing test_sha>..<failing test_sha>
+git -C repos/tests log --oneline --stat --left-right <last passing test_sha>...<failing test_sha>
 git -C repos/tests diff <last passing test_sha> <failing test_sha>
 ```
 
-If a commit doesn't resolve because the earlier build used another app repo, add that repo as a second remote in the same clone and fetch from it.
+The `--left-right` log marks commits only on the earlier side with `<` and those only on the failing side with `>`. Earlier runs can come from any branch, so an earlier commit isn't always an ancestor of the failing one; `git merge-base --is-ancestor <earlier> <failing>` tells. Only `>` commits can have broken a test that passed on the earlier side.
+
+If a commit doesn't resolve because the earlier build used another app repo, add that repo as a second remote in the same clone and fetch from it. A commit that still doesn't resolve, app or test, such as one on a deleted branch, makes the comparison weaker: say so and lower the confidence.
 
 Read every commit's diff in full, not only its message: messages can be misleading and a small change can hide among ordinary ones. Note what each commit changes in behaviour, such as a comparison, a condition, a default, a validation, a status code, a label or a response field.
 
@@ -207,9 +216,9 @@ Set `flake: true` when a test both passed and failed on the same app and test co
 - `failing_build` is the run id, as a number.
 - `commit` is the full app sha for a code change, the test repo sha for a test script problem caused by a test commit, and `null` otherwise, including below `CONFIDENCE_THRESHOLD`.
 - `confidence` is a number from 0 to 1. `leaning` is `{ "verdict": "...", "commit": "<sha or null>" }` below `CONFIDENCE_THRESHOLD`, otherwise `null`.
-- `last_passed` is the run where the group's tests last passed, with its app and test commits (`ohrm_sha` is `null` when that run recorded only an image tag). When the group's tests passed last in different runs, use the newest. When no passing run was found within 30 runs, use `null`.
+- `last_passed` is the run where the group's tests last passed, with its app and test commits. `test_sha` is always set; `ohrm_sha` is `null` when that run recorded only an image tag. When the group's tests passed last in different runs, use the newest by creation time, since one commit that broke them all came after it. That holds only while the newer run also ran newer code: when the runs' commits aren't in ancestor order, say so in the evidence and lower the confidence. When no passing run was found, use `null`.
 - `explanation` is plain words for a developer who has not seen the build.
-- `evidence` lists concrete items, each with its source: a file and line, a log line with its timestamp, a commit and the changed line, a run id. Say when a comparison is weaker because a run recorded only an image tag.
+- `evidence` lists concrete items, each with its source: a file and line, a log line with its timestamp, a commit and the changed line, a run id. Say when a comparison is weaker, such as a run with no `build-info.json` or an unresolvable commit. Give one line, `run <id>: <test> passed on app <sha>, test <sha>`, for each test whose own last pass differs from `last_passed`.
 
 Check before you finish: valid JSON (`jq . answer.json`), every failing test of the failing build in exactly one group, every id copied exactly from the lister, verdicts spelt exactly as above, and `confidence` consistent with `verdict` and `leaning`.
 
