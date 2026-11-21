@@ -52,7 +52,7 @@ gh run view "$FAILING" -R "$TEST_REPO" --json databaseId,headSha,headBranch,conc
 timeout 180 gh run download "$FAILING" -R "$TEST_REPO" -D evidence/failing
 ```
 
-Network commands can hang. Run every `gh run download`, `git clone` and `git fetch` under `timeout 180`, as here; if one times out, delete what it left and run it once more. In zsh, `$A:src` reads `:s` as a modifier: write `${A}:src`.
+Network commands can hang. Run every `gh run download`, `git clone` and `git fetch` under `timeout 180`, as here; if one times out, delete what it left and run it once more. In zsh, a `:` right after `$name` starts a modifier, so `git show $C:src/x.php` breaks: write `${C}:src/x.php`.
 
 Each run of a build is one artifact, `evidence/failing/evidence-run-N/`, with `json-report/results.json`, `playwright-report/`, `test-results/` and `app-logs/`. A run without `json-report/` ran no tests: read its job log with `gh run view "$FAILING" -R "$TEST_REPO" --log-failed` to see which step failed. A run with no artifact at all was cancelled or timed out before the upload: read its conclusion in the `jobs` of `run-failing.json`.
 
@@ -94,7 +94,7 @@ jq -r 'def clean: (. // "") | gsub("\u001b\\[[0-9;]*m"; "");
   | "### \(.file):\(.line) \(.title)", (.tests[].results[-1]
   | "\(.status) \(.startTime) \(.duration)ms \((.attachments[0].path // "") | (split("/test-results/")[1] // "") | split("/")[0])",
     ((.error.message | clean)[0:600]),
-    "at \((.error.stack | clean) | split("\n") | map(select(test("tests/|pages/|fixtures/|helpers/")) | sub("^ *at .*/why-is-my-test-red/"; "")) | .[0:3] | join(" | "))")' \
+    "at \((.error.stack | clean) | split("\n") | map(select(test("^ *at .*(tests|pages|fixtures|helpers)/")) | sub("^ *at .*/why-is-my-test-red/"; "")) | .[0:3] | join(" | "))")' \
   evidence/failing/evidence-run-1/json-report/results.json
 ```
 
@@ -138,10 +138,9 @@ git -C repos/tests merge-base --is-ancestor <run test_sha> <failing test_sha> &&
 timeout 180 git clone --quiet --filter=blob:none --no-checkout "<failing app repo>" repos/app
 timeout 180 git -C repos/app fetch --quiet origin <run app commit> <failing app commit>
 git -C repos/app merge-base --is-ancestor <run app commit> <failing app commit> && echo app-ok
-git -C repos/app checkout --quiet <failing app commit>
 ```
 
-Clone `repos/app` once and reuse it. Read and search the app code in its checkout, with `grep -rn` and `sed`. The clone has no file contents until they're needed, so `git grep <commit>` or a loop of `git show <commit>:<path>` downloads files one at a time and stalls for minutes; `git diff`, `git log -p` and `git checkout` download in one batch. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. A build on the released image, the failing one or an earlier one, has no `ohrm_repo` or `ohrm_sha`: its app repo is upstream, `https://github.com/orangehrm/orangehrm`, and its app commit is the release tag's, `git -C repos/app rev-parse "v<ohrm_version>^{commit}"`. The clone carries the tags. Use the tag, never a branch of the same name, such as `5.9`, which moves. A fork keeps upstream's tags; if one is missing, fetch it from an `upstream` remote.
+Clone `repos/app` once and reuse it. After its first fetch, check out the failing app commit once, with `timeout 180 git -C repos/app checkout --quiet <failing app commit>`. Read and search the app code in that checkout, with `grep -rn` and `sed`. The clone has no file contents until they're needed, so `git grep <commit>` or a loop of `git show <commit>:<path>` downloads files one at a time and stalls for minutes; `git diff`, `git log -p` and `git checkout` download in one batch. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. A build on the released image, the failing one or an earlier one, has no `ohrm_repo` or `ohrm_sha`: its app repo is upstream, `https://github.com/orangehrm/orangehrm`, and its app commit is the release tag's, `git -C repos/app rev-parse "v<ohrm_version>^{commit}"`. The clone carries the tags. Use the tag, never a branch of the same name, such as `5.9`, which moves. A fork keeps upstream's tags; if one is missing, fetch it from an `upstream` remote.
 
 A run fails the check when a commit doesn't resolve, or when its app ref is a branch or tag name with no pinned commit (a run without `build-info.json`, as in step 2): a name resolves to its tip today, not to what that run built. Skip a run that fails either check, for every test, and keep walking; it still counts towards the 30.
 
