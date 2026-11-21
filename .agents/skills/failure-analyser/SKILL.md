@@ -43,16 +43,16 @@ Below `CONFIDENCE_THRESHOLD`, `verdict` is `undetermined` and `commit` is `null`
 
 ## Steps
 
-Keep short notes in `notes.md` as you go, with file names and line numbers, so the evidence list is easy to write at the end.
-
 ### 1. Download the failing build
 
 ```bash
 TEST_REPO=s-petrov8/why-is-my-test-red
 FAILING=<failing run id>
 gh run view "$FAILING" -R "$TEST_REPO" --json databaseId,headSha,headBranch,conclusion,createdAt,jobs > run-failing.json
-gh run download "$FAILING" -R "$TEST_REPO" -D evidence/failing
+timeout 180 gh run download "$FAILING" -R "$TEST_REPO" -D evidence/failing
 ```
+
+Network commands can hang. Run every `gh run download`, `git clone` and `git fetch` under `timeout 180`, as here; if one times out, delete what it left and run it once more. In zsh, a `:` right after `$name` starts a modifier, so `git show $C:src/x.php` breaks: write `${C}:src/x.php`.
 
 Each run of a build is one artifact, `evidence/failing/evidence-run-N/`, with `json-report/results.json`, `playwright-report/`, `test-results/` and `app-logs/`. A run without `json-report/` ran no tests: read its job log with `gh run view "$FAILING" -R "$TEST_REPO" --log-failed` to see which step failed. A run with no artifact at all was cancelled or timed out before the upload: read its conclusion in the `jobs` of `run-failing.json`.
 
@@ -73,7 +73,7 @@ No `OHRM_REF` in the log means the build ran the released image for `OHRM_VERSIO
 Clone the test repo and list each run's failing tests with its lister, which prints the canonical test ids:
 
 ```bash
-git clone --quiet "https://github.com/$TEST_REPO.git" repos/tests
+timeout 180 git clone --quiet "https://github.com/$TEST_REPO.git" repos/tests
 for report in evidence/failing/evidence-run-*/json-report/results.json; do
     echo "== $report"
     node repos/tests/analyser/failing-tests.ts "$report"
@@ -86,18 +86,19 @@ Every test that failed in any run of the failing build must end up in exactly on
 
 ### 4. Read each failure
 
-For each failing test, read from `results.json` its error message and stack, its code snippet, its `test.step` titles, its `stdout` and `stderr`, its `startTime` and `duration`, and its attachments:
+For each failing test, read from `results.json` its error, where in the test code it failed, its `startTime` and `duration`, and its folder under `test-results/`, one block per test:
 
 ```bash
-jq 'def clean: (. // "") | gsub("\u001b\\[[0-9;]*m"; "");
+jq -r 'def clean: (. // "") | gsub("\u001b\\[[0-9;]*m"; "");
   .. | objects | select(has("specs")) | .specs[] | select(any(.tests[]; .status == "unexpected"))
-  | {title, file, line, results: [.tests[].results[-1] | {status, startTime, duration,
-     error: (.error.message | clean), stack: (.error.stack | clean), snippet: (.error.snippet | clean),
-     steps: [.steps[]?.title], stdout, stderr, attachments: [.attachments[] | {name, path}]}]}' \
+  | "### \(.file):\(.line) \(.title)", (.tests[].results[-1]
+  | "\(.status) \(.startTime) \(.duration)ms \((.attachments[0].path // "") | (split("/test-results/")[1] // "") | split("/")[0])",
+    ((.error.message | clean)[0:600]),
+    "at \((.error.stack | clean) | split("\n") | map(select(test("^ *at .*(tests|pages|fixtures|helpers)/")) | sub("^ *at .*/why-is-my-test-red/"; "")) | .[0:3] | join(" | "))")' \
   evidence/failing/evidence-run-1/json-report/results.json
 ```
 
-Attachment paths point at the CI runner. Find the same file under the run's `test-results/<folder>/`:
+When the message doesn't show the cause, read the rest of that test's result: `.error.snippet`, `[.steps[]?.title]`, `stdout` and `stderr`. Then read its files under `test-results/<folder>/`:
 
 - `error-context.md`: the error and the test source; for UI tests also the page as an accessibility snapshot at the moment of failure.
 - `trace.zip`: unzip it into the working folder. `*.network` files hold every request and response, with URL, method and status; response bodies are under `resources/`, named by the `_sha1` in the entry. `*.trace` files hold the actions and console messages.
@@ -107,7 +108,7 @@ Then read the application logs around each failure, from its `startTime` to `sta
 
 ### 5. Find earlier CI runs where those tests were successful
 
-For each failing test, walk the earlier runs of the workflow, newest first by creation time, and stop at the first run where that test passed. Only runs created before the failing run count, and look at no more than 30 of them. GitHub filters on the creation time, so this lists exactly those runs, however old the failing run is:
+For each failing test, walk the earlier runs of the workflow, newest first by creation time, and stop at the first run where that test passed. Only runs created before the failing run count, and look at no more than 30 of them:
 
 ```bash
 CREATED=$(jq -r .createdAt run-failing.json)
@@ -121,7 +122,7 @@ A run's conclusion doesn't matter: a failed run still shows which tests passed. 
 
 ```bash
 gh api -X GET "repos/$TEST_REPO/actions/runs/<run id>/artifacts" --jq '.artifacts[] | [.name, .expired] | @tsv'
-gh run download <run id> -R "$TEST_REPO" -n evidence-run-1 -D evidence/history/<run id>
+timeout 180 gh run download <run id> -R "$TEST_REPO" -n evidence-run-1 -D evidence/history/<run id>
 jq -r 'def specs($d): (.specs[]? | "tests/\(.file) > \(($d + [.title]) | join(" > "))\t\([.tests[].status] | unique | join(","))"),
          (.suites[]? | specs($d + [.title | select(. != "")]));
        .suites[] | specs([])' evidence/history/<run id>/json-report/results.json
@@ -132,14 +133,14 @@ This prints every test id with its outcome. The test passed when its outcome is 
 **Only runs on the failing build's line of history count.** A run counts when its app commit and its test commit are both ancestors of the failing build's. A branch merged into that line keeps its runs; unmerged work, such as another branch on the fork or a test-repo branch still under review, is skipped. Check the test commit first, before any download: a run's `headSha` in `history.tsv` is its `test_sha`. Then take the run's app commit from its `app-logs/build-info.json` (or as in step 2) and check that too:
 
 ```bash
-git -C repos/tests fetch --quiet origin <run test_sha> <failing test_sha>
+timeout 180 git -C repos/tests fetch --quiet origin <run test_sha> <failing test_sha>
 git -C repos/tests merge-base --is-ancestor <run test_sha> <failing test_sha> && echo tests-ok
-git clone --quiet --filter=blob:none --no-checkout "<failing app repo>" repos/app
-git -C repos/app fetch --quiet origin <run app commit> <failing app commit>
+timeout 180 git clone --quiet --filter=blob:none --no-checkout "<failing app repo>" repos/app
+timeout 180 git -C repos/app fetch --quiet origin <run app commit> <failing app commit>
 git -C repos/app merge-base --is-ancestor <run app commit> <failing app commit> && echo app-ok
 ```
 
-Clone `repos/app` once and reuse it. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. A build on the released image, the failing one or an earlier one, has no `ohrm_repo` or `ohrm_sha`: its app repo is upstream, `https://github.com/orangehrm/orangehrm`, and its app commit is the release tag's, `git -C repos/app rev-parse "v<ohrm_version>^{commit}"`. The clone carries the tags. Use the tag, never a branch of the same name, such as `5.9`, which moves. A fork keeps upstream's tags; if one is missing, fetch it from an `upstream` remote.
+Clone `repos/app` once and reuse it. After its first fetch, check out the failing app commit once, with `timeout 180 git -C repos/app checkout --quiet <failing app commit>`. Read and search the app code in that checkout, with `grep -rn` and `sed`. The clone has no file contents until they're needed, so `git grep <commit>` or a loop of `git show <commit>:<path>` downloads files one at a time and stalls for minutes; `git diff`, `git log -p` and `git checkout` download in one batch. If a run's app commit comes from another app repo, add that repo as a second remote and fetch from it. A build on the released image, the failing one or an earlier one, has no `ohrm_repo` or `ohrm_sha`: its app repo is upstream, `https://github.com/orangehrm/orangehrm`, and its app commit is the release tag's, `git -C repos/app rev-parse "v<ohrm_version>^{commit}"`. The clone carries the tags. Use the tag, never a branch of the same name, such as `5.9`, which moves. A fork keeps upstream's tags; if one is missing, fetch it from an `upstream` remote.
 
 A run fails the check when a commit doesn't resolve, or when its app ref is a branch or tag name with no pinned commit (a run without `build-info.json`, as in step 2): a name resolves to its tip today, not to what that run built. Skip a run that fails either check, for every test, and keep walking; it still counts towards the 30.
 
@@ -165,7 +166,7 @@ git -C repos/tests log --oneline --stat <last passing test_sha>..<failing test_s
 git -C repos/tests diff <last passing test_sha> <failing test_sha>
 ```
 
-The app commits are those from step 5, with the tag's commit for a released image; a comparison with a released image is weaker, since the image may differ from its tag, so say so and lower the confidence. Step 5 counts only runs whose commits are ancestors of the failing build's, so each log lists exactly the commits the failing build added since the test last passed.
+The app commits are those from step 5, with the tag's commit for a released image; a comparison with a released image is weaker, since the image may differ from its tag, so say so and lower the confidence.
 
 Read every commit's diff in full, not only its message: messages can be misleading and a small change can hide among ordinary ones. Note what each commit changes in behaviour, such as a comparison, a condition, a default, a validation, a status code, a label or a response field.
 
@@ -190,7 +191,7 @@ The evidence decides, not how many tests failed. Many tests failing at once is n
 
 Then score the confidence as described under Confidence. If it is below `CONFIDENCE_THRESHOLD`, write `undetermined` as the verdict and put the verdict you reached, with its commit, in `leaning`.
 
-Set `flake: true` when a test both passed and failed on the same app and test code: its last passing run has the failing build's app and test commits, or it failed in some runs of a build and passed in others. Earlier runs from step 5 can show it failing the same way on code without the commits under suspicion. Note those run ids in the evidence.
+Set `flake: true` when a test both passed and failed on the same app and test code: its last passing run has the failing build's app and test commits, or it failed in some runs of a build and passed in others. Runs that step 5 already read can show it failing the same way on code without the commits under suspicion: note those run ids in the evidence. Don't read runs older than a test's last pass to look for more.
 
 ### 9. Write `answer.json`
 
