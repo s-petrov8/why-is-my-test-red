@@ -78,7 +78,7 @@ test.describe('api/v2/pim/employees', () => {
                     baseUrl: appConfig.apiUrl,
                     body: requestBody,
                 });
-                // Only an accepted employee has data, and it needs removing.
+                // Only an accepted employee has data, so it needs removing.
                 empNumberToClean = body.data?.empNumber;
 
                 expect(status).toBe(422);
@@ -102,7 +102,7 @@ test.describe('api/v2/pim/employees', () => {
                     employeeId: tempTestEmployee.employeeId!,
                 }),
             });
-            // Only an accepted employee has data, and it needs removing.
+            // Only an accepted employee has data, so it needs removing.
             empNumberToClean = body.data?.empNumber;
 
             expect(status).toBe(422);
