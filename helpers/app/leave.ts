@@ -88,7 +88,7 @@ export async function assertLeaveTypeExists(
 }
 
 /**
- * Picks a leave type an employee can be granted an entitlement for.
+ * Picks a leave type that an employee can be granted an entitlement for.
  *
  * @param {APIRequestContext} context - An authenticated request context.
  * @returns {Promise<{ id: number, name: string }>} The chosen leave type.
