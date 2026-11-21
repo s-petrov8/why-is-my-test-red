@@ -12,6 +12,13 @@ An evaluation loop checks it. A mutator plants a fault in the app among harmless
 - `score.ts`: the scorer.
 - `*.test.ts`: unit tests for both, run with `npm run test:analyser`.
 - The analyser itself is the skill `.claude/skills/failure-analyser/`, with a copy at `.agents/skills/failure-analyser/`.
+- `.claude/agents/failure-analyser.md` runs that skill on Sonnet with only Bash, Read and Write. With no other tools to describe, a run starts at about 8 k tokens instead of 55 k. Run it from the repo root, with an empty working folder:
+
+```bash
+claude -p --agent failure-analyser --model sonnet --effort medium --tools Bash,Read,Write --strict-mcp-config --permission-mode bypassPermissions "Explain why CI run <run id> of s-petrov8/why-is-my-test-red failed. Your working folder is <empty folder>."
+```
+
+From a Claude Code session, the same agent runs as a subagent of type `failure-analyser`.
 
 ## Inputs
 
