@@ -21,7 +21,7 @@ export const INVALID_EMPLOYEE_DATA = [
     },
     {
         description: 'too long employee id',
-        employeeId: '94832947483',
+        employeeId: '9483294748',
         invalidKey: 'employeeId',
     },
     {
