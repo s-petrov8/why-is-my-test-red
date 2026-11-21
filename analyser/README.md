@@ -18,7 +18,7 @@ An evaluation loop checks it. A mutator plants a fault in the app among harmless
 claude -p --agent failure-analyser --model sonnet --effort medium --tools Bash,Read,Write --strict-mcp-config --permission-mode bypassPermissions "Explain why CI run <run id> of s-petrov8/why-is-my-test-red failed. Your working folder is <empty folder>."
 ```
 
-From a Claude Code session, the same agent runs as a subagent of type `failure-analyser`.
+A `claude` session started from the command line can also run it as a subagent of type `failure-analyser`, which preloads the skill. That session needs Bash, Read and Write itself, because a subagent gets only tools its parent has. Sessions in the Claude desktop app don't list this agent type.
 
 ## Inputs
 
