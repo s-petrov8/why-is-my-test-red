@@ -8,7 +8,7 @@ import type {
 import { createTerminationData } from '../../test-data/factories/app/employee.factory';
 
 /**
- * The termination calls tests share. As the project overrides in `AGENTS.md` require,
+ * The termination calls that tests share. As the project overrides in `AGENTS.md` require,
  * they check the status: `termination.spec.ts` validates the shapes. Termination ends
  * the employee's sessions at once, and terminating employee 1 locks the whole instance,
  * so these are only ever called on a throwaway employee.
