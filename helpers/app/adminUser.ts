@@ -95,9 +95,9 @@ export async function attemptSignIn(user: TempUser): Promise<SignInAttempt> {
         expect(validation.status(), await validation.text()).toBe(302);
 
         const location = validation.headers()['location'];
-        const landing = await context.get(location);
+        await context.get(location);
 
-        return { location, message: readLoginMessage(await landing.text()) };
+        return { location, message: readLoginMessage(loginHtml) };
     } finally {
         await context.dispose();
     }
