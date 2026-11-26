@@ -19,7 +19,7 @@ import { createUserData } from '../../test-data/factories/app/user.factory';
  * nobody who can sign in, which is why `createTempUser` always creates both.
  */
 
-/** A throwaway person: the employee record plus the account that signs in as them. */
+/** A throwaway person: the employee record plus the account that signs in as that person. */
 export type TempUser = {
     /** PIM employee number of the person the account signs in as. */
     empNumber: number;
