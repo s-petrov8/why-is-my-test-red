@@ -12,7 +12,7 @@ import { formatIsoDate } from '../../../helpers/util/util';
 import { createTerminationData } from '../../../test-data/factories/app/employee.factory';
 
 /**
- * What a reporting line gives a supervisor, and what it doesn't. Being a supervisor is
+ * What a reporting line gives a supervisor, and what it does not. Being a supervisor is
  * derived from having a line, and is read again on each request. The people are removed
  * by the fixtures, and their lines go with them, so nothing here needs its own cleanup.
  */
