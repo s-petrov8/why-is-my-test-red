@@ -511,7 +511,7 @@ export async function deleteHolidays(
 }
 
 /**
- * Reads the work week.
+ * Reads the current work week.
  *
  * @param {ApiRequestFn} api - The API, signed in as an administrator.
  * @returns {Promise<WorkWeek>} The length of each weekday.
