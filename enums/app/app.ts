@@ -40,7 +40,7 @@ export enum Messages {
     CREDENTIAL_REQUIRED = 'Credential Required',
 
     // Leave
-    LEAVE_SUBMIT_FAILED = 'Failed to Submit',
+    LEAVE_SUBMIT_FAILED = 'Submission failed',
     LEAVE_OVERLAP_HEADING = 'Overlapping Leave Request(s) Found',
     LEAVE_BALANCE_NOT_SUFFICIENT = 'Balance not sufficient',
     LEAVE_VIEW_DETAILS = 'View Leave Details',
