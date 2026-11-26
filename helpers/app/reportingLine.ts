@@ -37,7 +37,7 @@ export async function assignSupervisor(
 }
 
 /**
- * Removes one employee from another's reporting line.
+ * Removes one employee from another's reporting line, leaving both in place.
  *
  * @param {APIRequestContext} context - An authenticated request context.
  * @param {object} reportingLine - Who reports to whom.
