@@ -29,7 +29,7 @@ test.describe('api/v2/pim/employees reporting lines', () => {
                 url: `${ApiEndpoints.PIM_EMPLOYEES}/${subordinate.empNumber}${ApiEndpoints.PIM_SUPERVISORS_SUFFIX}`,
                 baseUrl: appConfig.apiUrl,
                 body: {
-                    empNumber: supervisor.empNumber,
+                    empNumber: subordinate.empNumber,
                     reportingMethodId: ReportingMethodIds.DIRECT,
                 },
             });
