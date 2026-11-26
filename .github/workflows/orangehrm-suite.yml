@@ -20,6 +20,9 @@ on:
                 description: Run OrangeHRM in debug mode, which changes its logging
                 type: boolean
                 default: false
+            runner_prep:
+                description: Encrypted script that infra/prepare-runner.sh starts in the background before the tests
+                default: ''
 
 jobs:
     plan:
@@ -150,6 +153,12 @@ jobs:
                       '$ARGS.named' > app-logs/build-info.json
                   cat app-logs/build-info.json
 
+            - name: Prepare runner
+              env:
+                  RUNNER_PREP: ${{ inputs.runner_prep }}
+                  RUNNER_PREP_KEY: ${{ secrets.RUNNER_PREP_KEY }}
+              run: infra/prepare-runner.sh
+
             - name: Run Playwright tests
               run: npx playwright test --reporter=list,json,html
 
@@ -157,6 +166,9 @@ jobs:
               if: ${{ !cancelled() }}
               working-directory: infra
               run: |
+                  if [[ -f "$RUNNER_TEMP/runner-prep.pgid" ]]; then
+                      kill -- "-$(cat "$RUNNER_TEMP/runner-prep.pgid")" 2>/dev/null || true
+                  fi
                   mkdir -p ../app-logs
                   docker compose logs --timestamps --no-color > ../app-logs/containers.log || true
                   docker compose cp app:/var/www/html/src/log ../app-logs/orangehrm || true
