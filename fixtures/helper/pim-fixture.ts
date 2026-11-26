@@ -16,7 +16,7 @@ import { Employee } from '../api/schemas/app/employeeSchema';
 // ==================== Types ====================
 
 export type PimFixtures = {
-    /** An employee created via API before the test and deleted after it. */
+    /** An employee created via the API before the test and deleted after it. */
     tempTestEmployee: Employee;
 };
 
