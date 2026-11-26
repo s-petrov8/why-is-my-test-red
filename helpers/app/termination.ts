@@ -15,7 +15,7 @@ import { createTerminationData } from '../../test-data/factories/app/employee.fa
  */
 
 /**
- * Terminates an employee and confirms it was accepted.
+ * Terminates an employee and confirms the application accepted it.
  *
  * @param {ApiRequestFn} api - The API, signed in as an administrator.
  * @param {number} empNumber - The employee.
